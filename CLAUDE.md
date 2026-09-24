@@ -71,3 +71,12 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
   renewals don't re-send emails. No changes means "unchanged" and no write.
 - Field keys live in `FIELD_KEYS` in import.js. They're still unconfirmed (open item above).
 - `npm test` runs against an in-memory fake Passcreator.
+
+## Online version (added later, at the owner's request)
+- Netlify project `gyc-membership-cards` (team `knightgsy`, site id d1a211b0-0e92-4e45-8191-b83ce2aa512e).
+- `public/index.html` = converter + import UI; `netlify/functions/passes.mjs` = `/api/passes`, reusing
+  import.js. Batches of up to 10 members per call; the function retries after 1 s and 2 s, and the page
+  retries whole batches after 2, 4 and 8 s (safe, because each row is looked up before writing).
+- `status` action: `GET /api/pass-template` (V1 list templates), used to show the template name.
+- Go live is only enabled after a practice run of the identical data.
+- `npm test` covers the function; the page was tested end to end in Chromium against a fake Passcreator.

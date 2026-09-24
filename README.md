@@ -1,5 +1,14 @@
 # GYC wallet membership cards: yearly update
 
+**Easiest way: use the website.** Go to https://gyc-membership-cards.netlify.app, sign in, and
+follow the four steps on the page: set the season, add the Sailing Club Manager export, check
+the members, then **Practice run** and **Go live**. Download the results log at the end and keep it.
+The page shows at the top whether it's connected to the TEST template or the REAL one.
+Nothing needs installing. The rest of this file covers the offline alternative (running it
+on your own computer), which does the same job.
+
+---
+
 This folder puts members' Guernsey Yacht Club cards into Apple Wallet and Google Wallet,
 and updates them each year after renewals close. You run it about once a year.
 
@@ -155,3 +164,15 @@ Before using it on the real membership template for the first time:
 - The Passcreator field names are listed in `FIELD_KEYS` at the top of `import.js`. Check them
   against the template once it's built (see `reference/pass-template-spec.md`).
 - The project brief is in `CLAUDE.md`.
+
+### Online version (Netlify)
+- Site: `gyc-membership-cards` on the GYC Netlify team. `public/index.html` is the page (the converter
+  plus the import); `netlify/functions/passes.mjs` is the server part at `/api/passes`. It reuses `import.js`
+  and handles up to 10 members per call, so it stays within Netlify's function time limit.
+- Netlify site settings (environment variables): `PASSCREATOR_API_KEY` (mark it as secret) and
+  `PASSCREATOR_TEMPLATE_ID`. Change the template ID to switch between the TEST and real templates; the page
+  shows which one it's using.
+- Access is controlled by Netlify's visitor access settings (team login or site password), which
+  cover the function too.
+- The site isn't linked to GitHub, so changes need a manual redeploy (or link the repo in Netlify under
+  Project configuration > Build & deploy).
