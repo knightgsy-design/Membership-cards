@@ -15,14 +15,15 @@ const { FIELD_KEYS } = require('./import.js');
 const DESIGN_NAME = 'GYC Membership TEST';
 
 // Club details shown on the back of the card. Leave a value empty ('') to leave it off the card.
+// Taken from https://www.gyc.org.gg/contact/ on 24 Sep 2026.
 const CLUB = {
   name: 'Guernsey Yacht Club',
-  address: 'Castle Emplacement, St Peter Port, Guernsey',
-  phone: '',          // e.g. '+44 1481 000000'
-  email: '',          // e.g. 'office@example.gg'
-  website: '',        // e.g. 'https://www.example.gg'
-  memberPortal: '',   // Sailing Club Manager member login page
-  events: '',         // club events / booking page
+  address: 'Castle Emplacement, St Peter Port, Guernsey GY1 1AU',
+  phone: '+44 (0)1481 722838',
+  email: 'club@gyc.org.gg',
+  website: 'https://www.gyc.org.gg',
+  memberPortal: 'https://members.gyc.org.gg/portal',   // Sailing Club Manager member login
+  events: 'https://members.gyc.org.gg/events',         // events calendar and booking
 };
 
 const COLORS = { backgroundColor: '#13294B', foregroundColor: '#FFFFFF', labelColor: '#D7B46A' };
@@ -43,7 +44,7 @@ function buildTemplate(source, name = DESIGN_NAME) {
     CLUB.memberPortal && { label: 'Manage my membership', value: CLUB.memberPortal },
     CLUB.events && { label: 'Book club events', value: CLUB.events },
     CLUB.website && { label: 'Club website', value: CLUB.website },
-    CLUB.phone && { label: 'Call the club', value: 'tel:' + CLUB.phone.replace(/[^+\d]/g, '') },
+    CLUB.phone && { label: 'Call the club', value: 'tel:' + CLUB.phone.replace(/\(0\)/g, '').replace(/[^+\d]/g, '') },
     CLUB.email && { label: 'Email the club', value: 'mailto:' + CLUB.email },
   ].filter(Boolean);
 
