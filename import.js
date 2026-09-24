@@ -168,7 +168,7 @@ function makeClient({ apiKey, fetchImpl = globalThis.fetch, sleep = ms => new Pr
       let json = null;
       try { json = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
       if (res.status === 401 || res.status === 403) {
-        throw new FatalError('Passcreator refused the API key (HTTP ' + res.status + '). Check PASSCREATOR_API_KEY in the .env file, and that the key can see this template.');
+        throw new FatalError('Passcreator refused the API key (HTTP ' + res.status + '). Check the PASSCREATOR_API_KEY setting (the .env file, or the Netlify site settings for the online version), and that the key can see this template.');
       }
       return { status: res.status, json, error: res.ok ? null : describeError(res.status, json, text) };
     }

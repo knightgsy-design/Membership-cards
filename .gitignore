@@ -4,3 +4,4 @@ node_modules/
 # Member exports and converter output contain personal data: keep them out of git.
 *.csv
 !sample-data/*.csv
+.netlify/
