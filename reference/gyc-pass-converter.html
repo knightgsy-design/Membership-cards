@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GYC Pass Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --ground:#EEF1F4; --paper:#FFFFFF; --ink:#16212E; --muted:#4F5B69; --line:#CBD3DC;
+  --navy:#13294B; --navy-ink:#FFFFFF; --gold:#94712C; --ok:#1E6B45; --ok-bg:#E3F1E8;
+  --warn:#8A4E07; --warn-bg:#FBEFD9; --err:#9B2C1F; --err-bg:#F8E3DF; --focus:#2B6CB0;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1622; --paper:#162233; --ink:#E8EDF3; --muted:#A8B4C2; --line:#2C3B50;
+    --navy:#9FB6DA; --navy-ink:#0E1622; --gold:#D7B46A; --ok:#7FD1A2; --ok-bg:#15352A;
+    --warn:#F0C27A; --warn-bg:#3A2A10; --err:#F2A396; --err-bg:#3D1C17; --focus:#8DB7F0;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1622; --paper:#162233; --ink:#E8EDF3; --muted:#A8B4C2; --line:#2C3B50;
+  --navy:#9FB6DA; --navy-ink:#0E1622; --gold:#D7B46A; --ok:#7FD1A2; --ok-bg:#15352A;
+  --warn:#F0C27A; --warn-bg:#3A2A10; --err:#F2A396; --err-bg:#3D1C17; --focus:#8DB7F0;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.55 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 20px 64px}
+h1,h2{font-family:Newsreader,Georgia,"Times New Roman",serif;font-weight:600;line-height:1.15;margin:0}
+h1{font-size:clamp(30px,6vw,42px);color:var(--ink)}
+.lede{color:var(--muted);max-width:60ch;margin:12px 0 0}
+.step{display:grid;grid-template-columns:56px minmax(0,1fr);gap:16px;margin-top:36px}
+.num{font-family:Newsreader,Georgia,serif;font-size:48px;line-height:1;color:var(--gold);font-weight:500}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px}
+h2{font-size:24px;margin-bottom:6px}
+.hint{color:var(--muted);margin:0 0 14px;font-size:15px}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:560px){.row{grid-template-columns:minmax(0,1fr)}.step{grid-template-columns:minmax(0,1fr);gap:4px}.num{font-size:36px}}
+label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
+input[type=text],input[type=date],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible,.drop:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer}
+.drop.over{border-color:var(--navy);background:var(--ground)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.drop strong{display:block;font-size:17px}
+.filename{margin-top:8px;color:var(--muted);font-size:14px}
+button{min-height:48px;padding:0 22px;border-radius:24px;border:0;background:var(--navy);color:var(--navy-ink);font:600 16px "Public Sans",system-ui,sans-serif;cursor:pointer}
+button[disabled]{opacity:.45;cursor:not-allowed}
+.map{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+@media (max-width:560px){.map{grid-template-columns:minmax(0,1fr)}}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 16px}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font-size:24px;font-family:Newsreader,Georgia,serif}
+.stat span{font-size:13px;color:var(--muted)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;background:var(--ground)}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.tag.err{background:var(--err-bg);color:var(--err)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.msg{margin-top:12px;padding:12px 14px;border-radius:10px;font-size:15px}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.msg.err{background:var(--err-bg);color:var(--err)}
+textarea{width:100%;min-height:160px;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--paper);color:var(--ink)}
+.foot{margin-top:40px;color:var(--muted);font-size:14px;max-width:60ch}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>GYC Pass Converter</h1>
+  <p class="lede">Turns the Sailing Club Manager member export into the file Passcreator needs to issue and update wallet membership cards. It runs in your browser: member data stays on this computer until you upload the result to Passcreator.</p>
+
+  <section class="step" aria-labelledby="s1">
+    <div class="num" aria-hidden="true">1</div>
+    <div class="card">
+      <h2 id="s1">Set the season</h2>
+      <p class="hint">Used on every card. Members with no expiry date in the export get the season end date.</p>
+      <div class="row">
+        <div><label for="season">Season shown on cards</label><input id="season" type="text" value="2026/27"></div>
+        <div><label for="seasonEnd">Season end date</label><input id="seasonEnd" type="date" value="2027-03-31"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="s2">
+    <div class="num" aria-hidden="true">2</div>
+    <div class="card">
+      <h2 id="s2">Add the member export</h2>
+      <p class="hint">Export current members from Sailing Club Manager as CSV, then drop the file here.</p>
+      <label class="drop" id="drop" for="file">
+        <input id="file" type="file" accept=".csv,text/csv">
+        <strong>Choose the CSV file</strong>
+        <span>or drag it onto this box</span>
+        <div class="filename" id="fileName"></div>
+      </label>
+      <div id="mapWrap" hidden>
+        <p class="hint" style="margin-top:18px">Check each field points at the right column. Use either full name, or first and last name.</p>
+        <div class="map" id="map"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="s3">
+    <div class="num" aria-hidden="true">3</div>
+    <div class="card">
+      <h2 id="s3">Check and download</h2>
+      <p class="hint" id="s3hint">Add a file to see the results.</p>
+      <div id="results" hidden>
+        <div class="stats">
+          <div class="stat"><b id="stRead">0</b><span>rows read</span></div>
+          <div class="stat"><b id="stOut">0</b><span>cards in file</span></div>
+          <div class="stat"><b id="stLapsed">0</b><span>lapsed, left out</span></div>
+          <div class="stat"><b id="stErr">0</b><span>errors, left out</span></div>
+        </div>
+        <div id="issuesWrap" hidden>
+          <p class="hint" style="margin:0">Fix these in Sailing Club Manager and export again. Warnings are included in the file; errors are not.</p>
+          <div class="scroll"><table><thead><tr><th>Row</th><th>Issue</th><th>Member no.</th><th>Name</th></tr></thead><tbody id="issues"></tbody></table></div>
+        </div>
+        <p class="hint" style="margin:18px 0 0">First rows of the Passcreator file:</p>
+        <div class="scroll"><table><thead><tr id="prevHead"></tr></thead><tbody id="prevBody"></tbody></table></div>
+        <div style="margin-top:18px;display:flex;gap:12px;flex-wrap:wrap">
+          <button id="dl" type="button">Download Passcreator file</button>
+        </div>
+        <div id="dlMsg" class="msg" hidden></div>
+        <div id="copyWrap" hidden>
+          <p class="hint" style="margin:14px 0 0">Downloads aren't available in this view. Copy the text below into a file named passcreator-import.csv.</p>
+          <textarea id="copyText" readonly aria-label="Passcreator file contents"></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Upload the downloaded file to the membership template in Passcreator, matching on memberNumber so existing cards update rather than duplicate. Full steps are in the annual runbook.</p>
+</main>
+
+<script>
+(function(){
+  var FIELDS = [
+    {key:"memberNumber", label:"Member number", need:true, alias:["memberno","membernumber","membershipnumber","membershipno","memberid","membersid","id","number","ref","reference"]},
+    {key:"fullName", label:"Full name", need:false, alias:["name","fullname","membername","displayname"]},
+    {key:"firstName", label:"First name", need:false, alias:["firstname","forename","forenames","givenname","first"]},
+    {key:"lastName", label:"Last name", need:false, alias:["lastname","surname","familyname","last"]},
+    {key:"email", label:"Email", need:true, alias:["email","emailaddress","email1","primaryemail"]},
+    {key:"membershipType", label:"Membership type", need:true, alias:["membershiptype","membership","membershipcategory","category","type","class","grade"]},
+    {key:"expiry", label:"Expiry date", need:false, alias:["expirydate","expiry","expires","expirationdate","renewaldate","enddate","validto","membershipexpiry","paiduntil","paidto"]}
+  ];
+  var MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+  var SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var headers = [], rows = [], mapping = {}, outRows = [], outCsv = "";
+
+  var $ = function(id){ return document.getElementById(id); };
+  function norm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+  function clean(v){ return v == null ? "" : String(v).trim(); }
+
+  function parseDate(s){
+    s = clean(s); if(!s) return null;
+    var m;
+    if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return mk(+m[1], +m[2]-1, +m[3]);
+    if((m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/))){ var y=+m[3]; if(y<100) y+=2000; return mk(y, +m[2]-1, +m[1]); }
+    if((m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?,?\s+(\d{4})/))){ var mo = MONTHS[m[2].slice(0,4).toLowerCase()]; if(mo==null) mo = MONTHS[m[2].slice(0,3).toLowerCase()]; if(mo!=null) return mk(+m[3], mo, +m[1]); }
+    return null;
+  }
+  function mk(y,m,d){ var dt = new Date(Date.UTC(y,m,d)); return (dt.getUTCFullYear()===y && dt.getUTCMonth()===m && dt.getUTCDate()===d) ? dt : null; }
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function nice(d){ return d.getUTCDate()+" "+SHORT[d.getUTCMonth()]+" "+d.getUTCFullYear(); }
+  function todayUTC(){ var n=new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())); }
+
+  function guess(){
+    var used = {};
+    FIELDS.forEach(function(f){
+      var hit = "";
+      for(var i=0;i<f.alias.length && !hit;i++){
+        for(var j=0;j<headers.length;j++){
+          if(!used[headers[j]] && norm(headers[j])===f.alias[i]){ hit = headers[j]; break; }
+        }
+      }
+      mapping[f.key] = hit; if(hit) used[hit] = true;
+    });
+    if(mapping.firstName && mapping.lastName && mapping.fullName && norm(mapping.fullName)==="name"){ /* keep all; full name wins */ }
+  }
+
+  function renderMap(){
+    var box = $("map"); box.textContent = "";
+    FIELDS.forEach(function(f){
+      var wrap = document.createElement("div");
+      var lab = document.createElement("label"); lab.htmlFor = "map_"+f.key; lab.textContent = f.label + (f.need ? "" : " (optional)");
+      var sel = document.createElement("select"); sel.id = "map_"+f.key;
+      var none = document.createElement("option"); none.value = ""; none.textContent = "Not in this file"; sel.appendChild(none);
+      headers.forEach(function(h){ var o=document.createElement("option"); o.value=h; o.textContent=h; if(h===mapping[f.key]) o.selected=true; sel.appendChild(o); });
+      sel.addEventListener("change", function(){ mapping[f.key] = sel.value; build(); });
+      wrap.appendChild(lab); wrap.appendChild(sel); box.appendChild(wrap);
+    });
+    $("mapWrap").hidden = false;
+  }
+
+  function build(){
+    var season = clean($("season").value);
+    var seasonEnd = parseDate($("seasonEnd").value);
+    var today = todayUTC();
+    var issues = [], seen = {}, lapsed = 0, errs = 0;
+    outRows = [];
+    rows.forEach(function(r, idx){
+      var rowNo = idx + 2;
+      var get = function(k){ return mapping[k] ? clean(r[mapping[k]]) : ""; };
+      var num = get("memberNumber");
+      var name = get("fullName") || [get("firstName"), get("lastName")].filter(Boolean).join(" ");
+      var email = get("email");
+      var type = get("membershipType");
+      var rawExp = get("expiry");
+      var exp = rawExp ? parseDate(rawExp) : seasonEnd;
+      var bad = [];
+      if(!num) bad.push("No member number");
+      if(!name) bad.push("No name");
+      if(rawExp && !exp) bad.push("Expiry date not recognised: "+rawExp);
+      if(!exp) bad.push("No expiry date and no season end set");
+      if(num && seen[num]) bad.push("Duplicate member number (first seen row "+seen[num]+")");
+      if(bad.length){ errs++; bad.forEach(function(b){ issues.push({row:rowNo, kind:"err", text:b, num:num, name:name}); }); return; }
+      seen[num] = rowNo;
+      if(exp < today){ lapsed++; return; }
+      if(!email) issues.push({row:rowNo, kind:"warn", text:"No email: card link cannot be sent", num:num, name:name});
+      else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({row:rowNo, kind:"warn", text:"Email looks wrong: "+email, num:num, name:name});
+      if(!type) issues.push({row:rowNo, kind:"warn", text:"No membership type", num:num, name:name});
+      outRows.push({memberNumber:num, memberName:name, email:email, membershipType:type, validTo:nice(exp), passExpiry:iso(exp), season:season});
+    });
+
+    $("stRead").textContent = rows.length;
+    $("stOut").textContent = outRows.length;
+    $("stLapsed").textContent = lapsed;
+    $("stErr").textContent = errs;
+
+    var tb = $("issues"); tb.textContent = "";
+    issues.slice(0,200).forEach(function(i){
+      var tr = document.createElement("tr");
+      var c1 = document.createElement("td"); c1.textContent = i.row;
+      var c2 = document.createElement("td"); var tg = document.createElement("span"); tg.className = "tag "+i.kind; tg.textContent = i.kind==="err" ? "Error" : "Warning"; c2.appendChild(tg); c2.appendChild(document.createTextNode(" "+i.text));
+      var c3 = document.createElement("td"); c3.textContent = i.num;
+      var c4 = document.createElement("td"); c4.textContent = i.name;
+      tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3); tr.appendChild(c4); tb.appendChild(tr);
+    });
+    $("issuesWrap").hidden = issues.length === 0;
+
+    var cols = ["memberNumber","memberName","email","membershipType","validTo","passExpiry","season"];
+    var ph = $("prevHead"); ph.textContent = "";
+    cols.forEach(function(c){ var th=document.createElement("th"); th.textContent=c; ph.appendChild(th); });
+    var pb = $("prevBody"); pb.textContent = "";
+    outRows.slice(0,5).forEach(function(o){ var tr=document.createElement("tr"); cols.forEach(function(c){ var td=document.createElement("td"); td.textContent=o[c]; tr.appendChild(td); }); pb.appendChild(tr); });
+
+    outCsv = window.Papa ? Papa.unparse({fields:cols, data:outRows.map(function(o){ return cols.map(function(c){ return o[c]; }); })}) : "";
+    $("copyText").value = outCsv;
+    $("dl").disabled = outRows.length === 0;
+    $("s3hint").textContent = outRows.length ? "Review any issues, then download." : "No cards to issue yet. Check the column mapping above.";
+    $("results").hidden = false;
+    $("dlMsg").hidden = true;
+  }
+
+  function load(file){
+    if(!file) return;
+    if(!window.Papa){ showMsg("err","The CSV reader didn't load. Check your connection and reload the page."); return; }
+    $("fileName").textContent = file.name;
+    Papa.parse(file, {header:true, skipEmptyLines:"greedy", transformHeader:function(h){ return clean(h); }, complete:function(res){
+      headers = (res.meta.fields||[]).filter(function(h){ return h !== ""; });
+      rows = res.data || [];
+      if(!headers.length || !rows.length){ $("s3hint").textContent = "That file has no rows. Export again from Sailing Club Manager as CSV."; $("results").hidden = true; return; }
+      guess(); renderMap(); build();
+    }, error:function(){ $("s3hint").textContent = "That file couldn't be read. Export it again from Sailing Club Manager as CSV."; }});
+  }
+
+  function showMsg(kind, text){ var m=$("dlMsg"); m.className="msg "+kind; m.textContent=text; m.hidden=false; }
+
+  var drop = $("drop");
+  $("file").addEventListener("change", function(e){ load(e.target.files[0]); });
+  ["dragenter","dragover"].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add("over"); }); });
+  ["dragleave","drop"].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove("over"); }); });
+  drop.addEventListener("drop", function(e){ if(e.dataTransfer && e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  $("season").addEventListener("input", function(){ if(rows.length) build(); });
+  $("seasonEnd").addEventListener("change", function(){ if(rows.length) build(); });
+
+  var downloads = null;
+  if(window.claude && typeof window.claude.use === "function"){
+    window.claude.use("downloads").then(function(d){ downloads = d; if(!d) $("copyWrap").hidden = false; }).catch(function(){ $("copyWrap").hidden = false; });
+  } else {
+    $("copyWrap").hidden = false;
+  }
+
+  $("dl").addEventListener("click", function(){
+    if(!outCsv) return;
+    var fname = "passcreator-import-" + clean($("season").value).replace(/[^0-9A-Za-z]+/g,"-") + ".csv";
+    if(!downloads){ $("copyWrap").hidden = false; $("copyText").focus(); $("copyText").select(); return; }
+    downloads.save({filename:fname, data:outCsv}).then(function(){
+      showMsg("ok","Saved " + outRows.length + " cards to " + fname + ". Import it into the Passcreator membership template.");
+    }).catch(function(err){
+      var code = err && err.code;
+      if(code === "declined") return;
+      if(code === "rate_limited"){ showMsg("err","A save is already waiting for your answer. Finish that first."); return; }
+      $("copyWrap").hidden = false;
+      showMsg("err","Download isn't available here. Copy the text below instead.");
+    });
+  });
+})();
+</script>
+</body>
+</html>

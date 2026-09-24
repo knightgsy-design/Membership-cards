@@ -1,0 +1,7 @@
+Member No,First Name,Last Name,Email,Membership Type,Expiry Date
+01234,Alex,Sample,alex.sample@example.com,Full sailing,31/03/2027
+01235,Sam,Testcase,sam.testcase@example.com,Family,31/03/2027
+01236,Jo,Example,,Social,31/03/2027
+01237,Chris,Placeholder,chris.placeholder@example.com,Junior,31/03/2026
+01238,Pat,Dummy,pat.dummy@example.com,Full sailing,
+01234,Duplicate,Row,dup@example.com,Full sailing,31/03/2027

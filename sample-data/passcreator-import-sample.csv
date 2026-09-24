@@ -1,0 +1,5 @@
+memberNumber,memberName,email,membershipType,validTo,passExpiry,season
+01234,Alex Sample,alex.sample@example.com,Full sailing,31 Mar 2027,2027-03-31,2026/27
+01235,Sam Testcase,sam.testcase@example.com,Family,31 Mar 2027,2027-03-31,2026/27
+01236,Jo Example,,Social,31 Mar 2027,2027-03-31,2026/27
+01238,Pat Dummy,pat.dummy@example.com,Full sailing,31 Mar 2027,2027-03-31,2026/27

@@ -1,0 +1,13 @@
+{
+  "name": "gyc-wallet-passes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Issue and update Guernsey Yacht Club wallet membership passes through the Passcreator API.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/import.test.js"
+  }
+}
