@@ -80,3 +80,8 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
 - `status` action: `GET /api/pass-template` (V1 list templates), used to show the template name.
 - Go live is only enabled after a practice run of the identical data.
 - `npm test` covers the function; the page was tested end to end in Chromium against a fake Passcreator.
+- Issued cards list: `list` action -> `GET /api/v3/pass?query=<base64url>` (templateId, userProvidedId notEmpty),
+  `formatKeyAdditionalProperties=name`, 100 per page, following only Passcreator's own `page.next` links.
+  "On phone" = active Apple/Google registrations. The API has no per-pass "email sent" status (only message
+  webhooks), so the page offers `email` -> `POST /api/pass/deliver/{identifier}/email/{address}` instead; it needs
+  an *ad hoc* email template on the pass template.

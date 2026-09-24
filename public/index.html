@@ -57,6 +57,9 @@ input:focus-visible,select:focus-visible,button:focus-visible,.drop:focus-within
 button{min-height:48px;padding:0 22px;border-radius:24px;border:0;background:var(--navy);color:var(--navy-ink);font:600 16px "Public Sans",system-ui,sans-serif;cursor:pointer}
 button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
 button.live{background:var(--err);color:var(--paper)}
+button.small{min-height:36px;padding:0 14px;font-size:14px}
+#cardFilter{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit}
+a{color:var(--navy)}
 button[disabled]{opacity:.45;cursor:not-allowed}
 .buttons{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap}
 .map{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
@@ -156,6 +159,23 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
         <div class="stats" id="runStats"></div>
         <div class="scroll"><table><thead><tr><th>Member no.</th><th>Result</th><th>Details</th></tr></thead><tbody id="runBody"></tbody></table></div>
         <div class="buttons"><button id="dlLog" class="secondary" type="button">Download results log</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="s5">
+    <div class="num" aria-hidden="true">&#10003;</div>
+    <div class="card">
+      <h2 id="s5">Cards already issued</h2>
+      <p class="hint">Every card on the template, and whether the member has added it to their phone. Passcreator doesn't report whether an email was opened, so <strong>&ldquo;On phone&rdquo;</strong> is the best sign a member got their card. Use <strong>Send card email</strong> to (re)send it.</p>
+      <div class="buttons" style="margin-top:0"><button id="showCards" type="button" disabled>Show issued cards</button></div>
+      <div id="cardsMsg" class="msg" hidden role="status"></div>
+      <div id="cardsWrap" hidden>
+        <div class="stats" id="cardStats"></div>
+        <label for="cardFilter">Find a member</label>
+        <input id="cardFilter" type="text" placeholder="Member number or name" autocomplete="off">
+        <div class="scroll"><table><thead><tr><th>Member no.</th><th>Name</th><th>Valid to</th><th>On phone</th><th>Created</th><th></th></tr></thead><tbody id="cardsBody"></tbody></table></div>
+        <div class="buttons"><button id="moreCards" class="secondary" type="button" hidden>Load more</button></div>
       </div>
     </div>
   </section>
@@ -320,6 +340,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
   function updateButtons(){
     var ready = connected && outRows.length > 0 && !running;
     $("practice").disabled = !ready;
+    $("showCards").disabled = !connected;
     $("live").disabled = !ready || practisedKey !== dataKey();
     $("live").title = $("live").disabled && ready ? "Do a practice run of this file first" : "";
   }
@@ -427,6 +448,75 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
   $("live").addEventListener("click", function(){ run(true); });
   $("dlLog").addEventListener("click", downloadLog);
   window.addEventListener("beforeunload", function(e){ if(running){ e.preventDefault(); e.returnValue = ""; } });
+
+  // ---- cards already issued ----
+  var cards = [], cardsNext = null;
+  function showCardsMsg(kind, text){ var m = $("cardsMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = !text; }
+  function exportEmail(num){
+    if(!num || !rows.length) return "";
+    for(var i=0;i<rows.length;i++){ var r = rows[i]; if(mapping.memberNumber && clean(r[mapping.memberNumber]) === num) return mapping.email ? clean(r[mapping.email]) : ""; }
+    return "";
+  }
+  function phoneText(c){
+    var on = [];
+    if(c.onApple) on.push("Apple");
+    if(c.onGoogle) on.push("Google");
+    if(!on.length && c.onOther) on.push("yes");
+    return on.length ? on.join(" + ") : "not yet";
+  }
+  function renderCards(){
+    var q = clean($("cardFilter").value).toLowerCase();
+    var tb = $("cardsBody"); tb.textContent = "";
+    cards.filter(function(c){ return !q || (c.memberNumber+" "+c.memberName).toLowerCase().indexOf(q) >= 0; }).forEach(function(c){
+      var tr = el("tr");
+      tr.appendChild(el("td", c.memberNumber));
+      tr.appendChild(el("td", c.memberName));
+      tr.appendChild(el("td", c.validTo));
+      var ph = el("td"); ph.appendChild(el("span", phoneText(c), "tag " + (phoneText(c) === "not yet" ? "warn" : "ok")));
+      if(c.firstDownloadedAt) ph.appendChild(document.createTextNode(" first " + c.firstDownloadedAt.slice(0,10)));
+      tr.appendChild(ph);
+      tr.appendChild(el("td", (c.createdOn||"").slice(0,10)));
+      var act = el("td");
+      var b = el("button", "Send card email", "secondary small"); b.type = "button";
+      b.addEventListener("click", function(){ sendEmail(c, b); });
+      act.appendChild(b);
+      if(c.link){ var a = el("a", "Card link"); a.href = c.link; a.target = "_blank"; a.rel = "noopener"; a.style.marginLeft = "10px"; act.appendChild(a); }
+      tr.appendChild(act);
+      tb.appendChild(tr);
+    });
+    var onPhone = cards.filter(function(c){ return phoneText(c) !== "not yet"; }).length;
+    var st = $("cardStats"); st.textContent = "";
+    [[cards.length, cardsNext ? "cards loaded so far" : "cards issued"], [onPhone, "on a phone"], [cards.length - onPhone, "not on a phone yet"]].forEach(function(x){
+      var d = el("div", null, "stat"); d.appendChild(el("b", x[0])); d.appendChild(el("span", x[1])); st.appendChild(d);
+    });
+    $("moreCards").hidden = !cardsNext;
+    $("cardsWrap").hidden = false;
+  }
+  function loadCards(more){
+    $("showCards").disabled = true; $("moreCards").disabled = true;
+    showCardsMsg("warn", "Loading cards from Passcreator…");
+    api(more ? {action:"list", next:cardsNext} : {action:"list"}).then(function(j){
+      if(!j.cards){ showCardsMsg("err", "Couldn't load the cards: " + (j.error || ("error " + j.httpStatus))); return; }
+      cards = more ? cards.concat(j.cards) : j.cards; cardsNext = j.next || null;
+      showCardsMsg("", ""); renderCards();
+      if(!cards.length) showCardsMsg("warn", "No cards have been issued on this template yet.");
+    }, function(){ showCardsMsg("err", "Couldn't reach this site's server. Check your internet connection."); })
+    .then(function(){ $("showCards").disabled = !connected; $("moreCards").disabled = false; $("showCards").textContent = "Refresh list"; });
+  }
+  function sendEmail(c, btn){
+    var addr = window.prompt("Send member " + c.memberNumber + (c.memberName ? " (" + c.memberName + ")" : "") + " their card by email.\n\nEmail address:", exportEmail(c.memberNumber));
+    if(addr == null) return;
+    addr = clean(addr);
+    if(!addr) return;
+    btn.disabled = true; btn.textContent = "Sending…";
+    api({action:"email", memberNumber:c.memberNumber, email:addr}).then(function(j){
+      if(j.ok){ btn.textContent = "Sent"; showCardsMsg("ok", "Card email sent to " + addr + " for member " + c.memberNumber + ". If it doesn't arrive, check spam, then Passcreator's email settings for the template."); }
+      else { btn.textContent = "Send card email"; btn.disabled = false; showCardsMsg("err", "Member " + c.memberNumber + ": " + (j.error || ("error " + j.httpStatus))); }
+    }, function(){ btn.textContent = "Send card email"; btn.disabled = false; showCardsMsg("err", "Couldn't reach this site's server."); });
+  }
+  $("showCards").addEventListener("click", function(){ loadCards(false); });
+  $("moreCards").addEventListener("click", function(){ loadCards(true); });
+  $("cardFilter").addEventListener("input", renderCards);
   checkConnection();
 })();
 </script>

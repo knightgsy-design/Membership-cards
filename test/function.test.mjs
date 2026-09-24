@@ -92,3 +92,47 @@ test('a pasted key with quotes or a Bearer prefix is cleaned', async () => {
   globalThis.fetch = orig;
   assert.strictEqual(seen[0], 'abc123');
 });
+
+test('list returns issued cards on the template, and only follows Passcreator page links', async () => {
+  const orig = globalThis.fetch;
+  let seenUrl = '';
+  globalThis.fetch = async (url, init) => {
+    seenUrl = url;
+    const body = { success: true, data: [{ userProvidedId: '01234', memberName: 'Alex', validTo: '31 Mar 2027', createdOn: '2026-09-24 10:00:00',
+      noOfActiveRegistrationsAppleWallet: 1, noOfActiveRegistrationsGoogleWallet: 0, noOfRegistrations: 1, firstDownloadedAt: '2026-09-24 11:00:00', linkToPassPage: 'https://app.passcreator.com/p/x' }],
+      page: { next: 'https://app.passcreator.com/api/v3/pass?page=2' } };
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body) };
+  };
+  const j = await (await post({ action: 'list' })).json();
+  const q = JSON.parse(Buffer.from(new URL(seenUrl).searchParams.get('query'), 'base64url').toString());
+  assert.strictEqual(q.templateId, 'tmpl-test');
+  assert.strictEqual(j.cards[0].memberNumber, '01234');
+  assert.strictEqual(j.cards[0].onApple, 1);
+  assert.strictEqual(j.next, 'https://app.passcreator.com/api/v3/pass?page=2');
+  await post({ action: 'list', next: j.next });
+  assert.strictEqual(seenUrl, 'https://app.passcreator.com/api/v3/pass?page=2');
+  const bad = await post({ action: 'list', next: 'https://evil.example/steal' });
+  assert.strictEqual(bad.status, 502);
+  globalThis.fetch = orig;
+});
+
+test('email checks the card is ours, then asks Passcreator to send it', async () => {
+  const orig = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(url); seen.push(init.method + ' ' + u.pathname);
+    const R = (s, b) => ({ ok: s < 300, status: s, headers: { get: () => null }, text: async () => JSON.stringify(b) });
+    if (u.pathname === '/api/pass/01234') return R(200, { identifier: 'uid-1', passTemplateGuid: 'tmpl-test' });
+    if (u.pathname === '/api/pass/09999') return R(200, { identifier: 'uid-9', passTemplateGuid: 'other' });
+    if (u.pathname.startsWith('/api/pass/deliver/')) return R(200, {});
+    return R(404, {});
+  };
+  let j = await (await post({ action: 'email', memberNumber: '01234', email: 'me@example.com' })).json();
+  assert.deepStrictEqual(j, { ok: true });
+  assert.ok(seen.includes('POST /api/pass/deliver/uid-1/email/me%40example.com'));
+  j = await (await post({ action: 'email', memberNumber: '09999', email: 'me@example.com' })).json();
+  assert.match(j.error, /different template/);
+  j = await (await post({ action: 'email', memberNumber: '01234', email: 'not-an-email' })).json();
+  assert.match(j.error, /doesn't look like an email/);
+  globalThis.fetch = orig;
+});
