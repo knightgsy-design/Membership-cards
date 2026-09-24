@@ -136,12 +136,17 @@ export async function applyDesign(client, sourceTemplateId, { createOnly = false
   return { templateId: f.existing.identifier, templateName: design.DESIGN_NAME, created: false, warnings };
 }
 
-export default async (req) => {
-  if (req.method !== 'POST') return reply(405, { error: 'Use POST' });
-
+export function readSettings() {
   // Forgive common paste slips: the variable name pasted too, surrounding quotes, a "Bearer " prefix (Passcreator wants the bare key).
   const apiKey = (Netlify.env.get('PASSCREATOR_API_KEY') || '').trim().replace(/^PASSCREATOR_API_KEY\s*=\s*/i, '').replace(/^(['"])(.*)\1$/, '$2').replace(/^Bearer\s+/i, '').trim();
   const templateId = (Netlify.env.get('PASSCREATOR_TEMPLATE_ID') || '').trim();
+  return { apiKey, templateId };
+}
+
+export default async (req) => {
+  if (req.method !== 'POST') return reply(405, { error: 'Use POST' });
+
+  const { apiKey, templateId } = readSettings();
   if (!apiKey) return fatal(500, 'The site is not set up yet: PASSCREATOR_API_KEY must be set in the Netlify site settings.');
 
   let body;
