@@ -136,3 +136,41 @@ test('email checks the card is ours, then asks Passcreator to send it', async ()
   assert.match(j.error, /doesn't look like an email/);
   globalThis.fetch = orig;
 });
+
+test('design: creates the TEST template from the source, then updates and publishes it', async () => {
+  const orig = globalThis.fetch;
+  const calls2 = [];
+  let exists = false;
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(url);
+    const body = init.body && JSON.parse(init.body);
+    calls2.push({ m: init.method, p: u.pathname, body });
+    const R = (s, b) => ({ ok: s < 300, status: s, headers: { get: () => null }, text: async () => JSON.stringify(b) });
+    if (u.pathname === '/api/pass-template') return R(200, [{ identifier: 'tmpl-test', name: 'Membership Onboarding' }, ...(exists ? [{ identifier: 'new-1', name: 'GYC Membership TEST' }] : [])]);
+    if (u.pathname === '/api/v2/pass-template/tmpl-test/describe') return R(200, { success: true, data: { passTypeId: 'pass.gg.gyc', images: { icon: 'https://x/icon.png', logo: 'https://x/logo.png' }, googlePayActive: true, sendoutOptions: { adHoc: { emailTemplate: null, subject: '' } } } });
+    if (init.method === 'POST' && u.pathname === '/api/v2/pass-template') { exists = true; return R(201, { success: true, data: { identifier: 'new-1' } }); }
+    if (init.method === 'POST' && u.pathname === '/api/v2/pass-template/new-1') return R(200, { success: true });
+    if (init.method === 'POST' && u.pathname === '/api/v2/pass-template/new-1/publish') return R(201, { success: true });
+    return R(404, {});
+  };
+  let j = await (await post({ action: 'design' })).json();
+  assert.strictEqual(j.templateId, 'new-1');
+  assert.strictEqual(j.created, true);
+  const created = calls2.find(c => c.m === 'POST' && c.p === '/api/v2/pass-template').body;
+  assert.strictEqual(created.name, 'GYC Membership TEST');
+  assert.strictEqual(created.passTypeId, 'pass.gg.gyc');
+  assert.strictEqual(created.images.icon, 'https://x/icon.png');
+  assert.strictEqual(created.barcode.value, '{memberNumber}');
+  assert.strictEqual(created.fields.primaryFields[0].value, '{memberName}');
+  assert.deepStrictEqual(created.additionalProperties.map(p => p.name), ['memberNumber', 'memberName', 'membershipType', 'validTo', 'season']);
+  assert.ok(j.warnings.some(w => /email template/.test(w)));
+  assert.ok(!calls2.some(c => c.p.includes('tmpl-test') && c.m !== 'GET'), 'source template is never written');
+
+  j = await (await post({ action: 'design' })).json();
+  assert.strictEqual(j.created, false);
+  assert.ok(calls2.some(c => c.p === '/api/v2/pass-template/new-1/publish' && /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(c.body.publicationDate)));
+
+  const s = await (await post({ action: 'status' })).json();
+  globalThis.fetch = orig;
+  assert.deepStrictEqual(s.designTemplate, { name: 'GYC Membership TEST', id: 'new-1' });
+});

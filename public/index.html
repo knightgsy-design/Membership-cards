@@ -175,7 +175,8 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
         <label for="cardFilter">Find a member</label>
         <input id="cardFilter" type="text" placeholder="Member number or name" autocomplete="off">
         <div class="scroll"><table><thead><tr><th>Member no.</th><th>Name</th><th>Valid to</th><th>On phone</th><th>Created</th><th></th></tr></thead><tbody id="cardsBody"></tbody></table></div>
-        <div class="buttons"><button id="moreCards" class="secondary" type="button" hidden>Load more</button></div>
+        <div class="buttons"><button id="moreCards" class="secondary" type="button" hidden>Load more</button><button id="cardLinks" class="secondary" type="button">Download card links (for a mail-merge)</button></div>
+        <p class="hint" style="margin:10px 0 0">The card links file has each member's personal card link, and their email if the member export is loaded above. Use it for a mail-merge if Passcreator can't send the emails.</p>
       </div>
     </div>
   </section>
@@ -236,6 +237,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
         c.textContent = test
           ? "Connected to Passcreator. Using the TEST template “"+j.templateName+"”: cards made now are for testing."
           : "Connected to Passcreator. Using the REAL membership template “"+j.templateName+"”: going live changes members' cards.";
+        if(j.designTemplate) c.textContent += " A new card design “" + j.designTemplate.name + "” is ready (ID " + j.designTemplate.id + "): to use it, put that ID in PASSCREATOR_TEMPLATE_ID in Netlify and redeploy.";
       } else {
         c.className = "conn err";
         c.textContent = "Can't connect to Passcreator: " + (j.error || ("the site replied with error " + j.httpStatus)) + " Ask whoever looks after this site.";
@@ -503,6 +505,19 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     }, function(){ showCardsMsg("err", "Couldn't reach this site's server. Check your internet connection."); })
     .then(function(){ $("showCards").disabled = !connected; $("moreCards").disabled = false; $("showCards").textContent = "Refresh list"; });
   }
+  function mailtoFor(addr, c, link){
+    var first = (c.memberName || "").split(" ")[0];
+    var body = "Dear " + (first || "member") + ",\n\nHere is your Guernsey Yacht Club membership card for your phone. Open this link on your phone and tap \"Add to Apple Wallet\" or \"Add to Google Wallet\":\n\n" + link +
+      "\n\nShow the card at the bar for member prices, and at the door for member-only events. It updates by itself when you renew.\n\nGuernsey Yacht Club";
+    return "mailto:" + encodeURIComponent(addr) + "?subject=" + encodeURIComponent("Your Guernsey Yacht Club membership card") + "&body=" + encodeURIComponent(body);
+  }
+  function downloadCardLinks(){
+    var head = "memberNumber,memberName,email,onPhone,cardLink";
+    var lines = cards.map(function(c){ return [c.memberNumber, c.memberName, exportEmail(c.memberNumber), phoneText(c), c.link].map(csvCell).join(","); });
+    var a = el("a"); a.href = URL.createObjectURL(new Blob([[head].concat(lines).join("\r\n") + "\r\n"], {type:"text/csv"}));
+    a.download = "card-links-" + stamp() + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
   function sendEmail(c, btn){
     var addr = window.prompt("Send member " + c.memberNumber + (c.memberName ? " (" + c.memberName + ")" : "") + " their card by email.\n\nEmail address:", exportEmail(c.memberNumber));
     if(addr == null) return;
@@ -511,11 +526,21 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     btn.disabled = true; btn.textContent = "Sending…";
     api({action:"email", memberNumber:c.memberNumber, email:addr}).then(function(j){
       if(j.ok){ btn.textContent = "Sent"; showCardsMsg("ok", "Card email sent to " + addr + " for member " + c.memberNumber + ". If it doesn't arrive, check spam, then Passcreator's email settings for the template."); }
-      else { btn.textContent = "Send card email"; btn.disabled = false; showCardsMsg("err", "Member " + c.memberNumber + ": " + (j.error || ("error " + j.httpStatus))); }
+      else {
+        btn.textContent = "Send card email"; btn.disabled = false;
+        showCardsMsg("err", "Member " + c.memberNumber + ": " + (j.error || ("error " + j.httpStatus)));
+        var link = j.link || c.link;
+        if(j.canMailto && link){
+          var m = $("cardsMsg");
+          m.appendChild(document.createTextNode(" Meanwhile you can send it from your own email: "));
+          var a = el("a", "Email from my own account"); a.href = mailtoFor(addr, c, link); m.appendChild(a);
+        }
+      }
     }, function(){ btn.textContent = "Send card email"; btn.disabled = false; showCardsMsg("err", "Couldn't reach this site's server."); });
   }
   $("showCards").addEventListener("click", function(){ loadCards(false); });
   $("moreCards").addEventListener("click", function(){ loadCards(true); });
+  $("cardLinks").addEventListener("click", downloadCardLinks);
   $("cardFilter").addEventListener("input", renderCards);
   checkConnection();
 })();

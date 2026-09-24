@@ -168,6 +168,7 @@ Before using it on the real membership template for the first time:
 - The project brief is in `CLAUDE.md`.
 
 ### Online version (Netlify)
+- Card design: `card-design.js`, applied from `/setup.html` (creates or updates the "GYC Membership TEST" template).
 - Site: `gyc-membership-cards` on the GYC Netlify team. `public/index.html` is the page (the converter
   plus the import); `netlify/functions/passes.mjs` is the server part at `/api/passes`. It reuses `import.js`
   and handles up to 10 members per call, so it stays within Netlify's function time limit.

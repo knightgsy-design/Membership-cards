@@ -7,6 +7,8 @@
 //   -> {"results": [{"memberNumber", "action", "reason"}, ...]}
 // POST /api/passes  {"action": "list", "next": optional}     issued cards, 100 per page
 //   -> {"cards": [...], "next": "..." | null}      uses GET /api/v3/pass with a query on the template
+// POST /api/passes  {"action": "design"}     create or update the "GYC Membership TEST" card design (card-design.js)
+//   -> {"templateId", "templateName", "created": bool, "warnings": [...]}
 // POST /api/passes  {"action": "email", "memberNumber", "email"}
 //   -> {"ok": true}      uses POST /api/pass/deliver/{userProvidedId}/email/{address} (V1 "Send a Pass via Email")
 // Errors: {"error": "...", "fatal": true} when the whole run must stop (settings or key problem).
@@ -15,6 +17,7 @@
 // The site itself is password protected in Netlify, which covers this function too.
 
 import cli from '../../import.js';
+import design from '../../card-design.js';
 
 const { validateRows, makeClient, processRow, FatalError, FIELD_KEYS } = cli;
 const MAX_BATCH = 10;
@@ -38,7 +41,8 @@ async function templateName(client, templateId) {
     const seen = list.map(t => `"${t.name}" = ${t.identifier}`).join('; ') || 'none';
     return { error: `${templateId ? `the template ID "${templateId}" was not found` : 'PASSCREATOR_TEMPLATE_ID is not set'}. Templates this API key can see: ${seen}. Copy the right ID into PASSCREATOR_TEMPLATE_ID in the Netlify settings and redeploy` };
   }
-  return { name: t.name };
+  const d = list.find(t => t.name === design.DESIGN_NAME);
+  return { name: t.name, designId: d ? d.identifier : null };
 }
 
 const API_BASE = 'https://app.passcreator.com';
@@ -85,8 +89,51 @@ async function emailCard(client, templateId, memberNumber, email) {
   const pass = Array.isArray(r.json) ? r.json[0] : r.json;
   if (!pass || (pass.passTemplateGuid && pass.passTemplateGuid !== templateId)) return { error: 'that card is on a different template' };
   const s = await client.request('POST', `/api/pass/deliver/${encodeURIComponent(pass.identifier)}/email/${encodeURIComponent(email)}`);
-  if (s.error) return { error: `Passcreator didn't send it: ${s.error}` };
+  if (s.status === 400) return { error: 'Passcreator refused to send it (HTTP 400). The usual reason is that this template has no "ad hoc" email template chosen in its sendout (email) settings in Passcreator.', link: pass.linkToPassPage || null, canMailto: true };
+  if (s.error) return { error: `Passcreator didn't send it: ${s.error}`, link: pass.linkToPassPage || null, canMailto: true };
   return { ok: true };
+}
+
+function londonNow() {
+  // Passcreator's publish date is in the account's timezone; the club is in Guernsey (UK time).
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
+const v2error = (r, what) => `${what} failed: ${r.error || (r.json && Array.isArray(r.json.errors) && r.json.errors.join('; ')) || 'unknown error'}`;
+
+async function findDesignTemplate(client) {
+  const l = await client.request('GET', '/api/pass-template');
+  if (l.error) return { error: v2error(l, 'Listing templates') };
+  return { existing: (Array.isArray(l.json) ? l.json : []).find(t => t.name === design.DESIGN_NAME) || null };
+}
+
+// Creates the design template, or (unless createOnly) updates it and publishes to existing cards.
+export async function applyDesign(client, sourceTemplateId, { createOnly = false } = {}) {
+  const f = await findDesignTemplate(client);
+  if (f.error) return f;
+  if (f.existing && createOnly) return { templateId: f.existing.identifier, templateName: design.DESIGN_NAME, created: false, skipped: true, warnings: [] };
+
+  // Copy the certificate, images, wallet and email settings from the source (never from the design itself,
+  // unless the site already points at it).
+  const d = await client.request('GET', `/api/v2/pass-template/${encodeURIComponent(sourceTemplateId)}/describe`);
+  if (d.error || !d.json || !d.json.data) return { error: v2error(d, 'Reading the current template') };
+  const source = d.json.data;
+  if (!source.passTypeId || !(source.images && source.images.icon)) return { error: 'the current template has no Apple pass certificate or icon to copy' };
+  const body = design.buildTemplate(source);
+  const warnings = design.designWarnings(source);
+
+  if (!f.existing) {
+    const c = await client.request('POST', '/api/v2/pass-template', body);
+    if (c.error || !c.json || c.json.success === false || !c.json.data) return { error: v2error(c, 'Creating the template') };
+    return { templateId: c.json.data.identifier, templateName: design.DESIGN_NAME, created: true, warnings };
+  }
+  const u = await client.request('POST', `/api/v2/pass-template/${encodeURIComponent(f.existing.identifier)}`, body);
+  if (u.error || (u.json && u.json.success === false)) return { error: v2error(u, 'Updating the template') };
+  const p = await client.request('POST', `/api/v2/pass-template/${encodeURIComponent(f.existing.identifier)}/publish`, { publicationDate: londonNow() });
+  if (p.error) warnings.unshift(`The design was saved but not pushed to existing cards (${p.error}). Publish it in Passcreator.`);
+  return { templateId: f.existing.identifier, templateName: design.DESIGN_NAME, created: false, warnings };
 }
 
 export default async (req) => {
@@ -108,7 +155,10 @@ export default async (req) => {
   try {
     if (body.action === 'status') {
       const t = await templateName(client, templateId);
-      return t.error ? fatal(502, `Passcreator: ${t.error}.`) : reply(200, { templateName: t.name });
+      if (t.error) return fatal(502, `Passcreator: ${t.error}.`);
+      const out = { templateName: t.name };
+      if (t.name !== design.DESIGN_NAME && t.designId) out.designTemplate = { name: design.DESIGN_NAME, id: t.designId };
+      return reply(200, out);
     }
 
     if (body.action === 'run') {
@@ -129,9 +179,14 @@ export default async (req) => {
       return l.error ? reply(502, { error: l.error }) : reply(200, l);
     }
 
+    if (body.action === 'design') {
+      const r = await applyDesign(client, templateId);
+      return r.error ? reply(502, { error: r.error }) : reply(200, r);
+    }
+
     if (body.action === 'email') {
       const e = await emailCard(client, templateId, body.memberNumber, body.email);
-      return e.error ? reply(400, { error: e.error }) : reply(200, { ok: true });
+      return e.error ? reply(400, e) : reply(200, { ok: true });
     }
 
     return reply(400, { error: 'Unknown action' });

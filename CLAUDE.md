@@ -85,3 +85,9 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
   "On phone" = active Apple/Google registrations. The API has no per-pass "email sent" status (only message
   webhooks), so the page offers `email` -> `POST /api/pass/deliver/{identifier}/email/{address}` instead; it needs
   an *ad hoc* email template on the pass template.
+- Card design: `card-design.js` (layout, colours, back fields, CLUB details). `/setup.html` -> `design` action:
+  describe the connected template (`GET /api/v2/pass-template/{id}/describe`), copy passTypeId, icon/logo, walletApps,
+  googlePayActive and sendoutOptions, then create "GYC Membership TEST" (`POST /api/v2/pass-template`) or update it
+  (`POST /api/v2/pass-template/{id}` + `/publish`). Never writes the source template. The API has no way to create
+  email templates, so emails need an email template picked in Passcreator; until then the page offers a mailto
+  fallback and a card-links CSV for a mail-merge. Club phone/email/website/portal/events links are still blank in CLUB.
