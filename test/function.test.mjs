@@ -173,4 +173,27 @@ test('design: creates the TEST template from the source, then updates and publis
   const s = await (await post({ action: 'status' })).json();
   globalThis.fetch = orig;
   assert.deepStrictEqual(s.designTemplate, { name: 'GYC Membership TEST', id: 'new-1' });
+  assert.deepStrictEqual(s.emailSetup, { adHoc: false, adHocSubject: '', creationNotice: false });
+});
+
+test('delete: only deletes cards on the connected template', async () => {
+  const orig = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(url); seen.push(init.method + ' ' + u.pathname);
+    const R = (s, b) => ({ ok: s < 300, status: s, headers: { get: () => null }, text: async () => JSON.stringify(b) });
+    if (u.pathname === '/api/pass/aaaa-1111') return R(200, { identifier: 'aaaa-1111', passTemplateGuid: 'tmpl-test' });
+    if (u.pathname === '/api/pass/bbbb-2222') return R(200, { identifier: 'bbbb-2222', passTemplateGuid: 'other' });
+    if (init.method === 'DELETE') return R(200, { success: true });
+    return R(404, {});
+  };
+  let j = await (await post({ action: 'delete', identifier: 'aaaa-1111' })).json();
+  assert.deepStrictEqual(j, { ok: true });
+  assert.ok(seen.includes('DELETE /api/v3/pass/aaaa-1111'));
+  j = await (await post({ action: 'delete', identifier: 'bbbb-2222' })).json();
+  assert.match(j.error, /different template/);
+  assert.ok(!seen.includes('DELETE /api/v3/pass/bbbb-2222'));
+  j = await (await post({ action: 'delete', identifier: '../x' })).json();
+  assert.match(j.error, /no card identifier/);
+  globalThis.fetch = orig;
 });

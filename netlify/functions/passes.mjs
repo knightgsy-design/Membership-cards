@@ -9,6 +9,8 @@
 //   -> {"cards": [...], "next": "..." | null}      uses GET /api/v3/pass with a query on the template
 // POST /api/passes  {"action": "design"}     create or update the "GYC Membership TEST" card design (card-design.js)
 //   -> {"templateId", "templateName", "created": bool, "warnings": [...]}
+// POST /api/passes  {"action": "delete", "identifier"}      delete one card (must be on the connected template)
+//   -> {"ok": true}      uses DELETE /api/v3/pass/{identifier}
 // POST /api/passes  {"action": "email", "memberNumber", "email"}
 //   -> {"ok": true}      uses POST /api/pass/deliver/{userProvidedId}/email/{address} (V1 "Send a Pass via Email")
 // Errors: {"error": "...", "fatal": true} when the whole run must stop (settings or key problem).
@@ -63,6 +65,7 @@ async function listCards(client, templateId, next) {
   if (r.error) return { error: `couldn't list cards (${r.error})` };
   const data = (r.json && Array.isArray(r.json.data)) ? r.json.data : [];
   const cards = data.map(p => ({
+    identifier: p.identifier || '',
     memberNumber: p.userProvidedId || p.barcodeValue || '',
     memberName: p[FIELD_KEYS.memberName] ?? '',
     validTo: p[FIELD_KEYS.validTo] ?? '',
@@ -75,6 +78,22 @@ async function listCards(client, templateId, next) {
     link: p.linkToPassPage || '',
   }));
   return { cards, next: (r.json && r.json.page && r.json.page.next) || null, total: r.json && r.json.responseMetaData && r.json.responseMetaData.resultsTotal };
+}
+
+async function deleteCard(client, templateId, identifier) {
+  identifier = String(identifier || '').trim();
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(identifier)) return { error: 'no card identifier' };
+  // Only ever delete cards on the template this site is connected to.
+  const r = await client.request('GET', `/api/pass/${encodeURIComponent(identifier)}`);
+  if (r.status === 404) return { error: 'that card no longer exists' };
+  if (r.error) return { error: `couldn't find the card (${r.error})` };
+  const pass = Array.isArray(r.json) ? r.json[0] : r.json;
+  if (!pass || pass.identifier !== identifier) return { error: 'that card could not be matched' };
+  if (pass.passTemplateGuid !== templateId) return { error: 'that card is on a different template, so it was not deleted' };
+  const d = await client.request('DELETE', `/api/v3/pass/${encodeURIComponent(identifier)}`);
+  if (d.status === 404) return { ok: true };
+  if (d.error || (d.json && d.json.success === false)) return { error: `Passcreator didn't delete it: ${d.error || 'unknown error'}` };
+  return { ok: true };
 }
 
 async function emailCard(client, templateId, memberNumber, email) {
@@ -162,6 +181,16 @@ export default async (req) => {
       const t = await templateName(client, templateId);
       if (t.error) return fatal(502, `Passcreator: ${t.error}.`);
       const out = { templateName: t.name };
+      // Report the template's email (sendout) settings, so the page can say why emails may not arrive.
+      const d = await client.request('GET', `/api/v2/pass-template/${encodeURIComponent(templateId)}/describe`);
+      const so = d.json && d.json.data && d.json.data.sendoutOptions;
+      if (so) {
+        out.emailSetup = {
+          adHoc: Boolean(so.adHoc && so.adHoc.emailTemplate),
+          adHocSubject: (so.adHoc && so.adHoc.subject) || '',
+          creationNotice: Boolean(so.passCreationNotification && so.passCreationNotification.emailTemplate),
+        };
+      }
       if (t.name !== design.DESIGN_NAME && t.designId) out.designTemplate = { name: design.DESIGN_NAME, id: t.designId };
       return reply(200, out);
     }
@@ -187,6 +216,11 @@ export default async (req) => {
     if (body.action === 'design') {
       const r = await applyDesign(client, templateId);
       return r.error ? reply(502, { error: r.error }) : reply(200, r);
+    }
+
+    if (body.action === 'delete') {
+      const r = await deleteCard(client, templateId, body.identifier);
+      return r.error ? reply(400, r) : reply(200, { ok: true });
     }
 
     if (body.action === 'email') {

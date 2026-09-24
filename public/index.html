@@ -167,7 +167,8 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     <div class="num" aria-hidden="true">&#10003;</div>
     <div class="card">
       <h2 id="s5">Cards already issued</h2>
-      <p class="hint">Every card on the template, and whether the member has added it to their phone. Passcreator doesn't report whether an email was opened, so <strong>&ldquo;On phone&rdquo;</strong> is the best sign a member got their card. Use <strong>Send card email</strong> to (re)send it.</p>
+      <p class="hint">Every card on the template, and whether the member has added it to their phone. Passcreator doesn't report whether an email was opened, so <strong>&ldquo;On phone&rdquo;</strong> is the best sign a member got their card. Use <strong>Send card email</strong> to (re)send it, or <strong>Delete</strong> to remove a card (for example a test card, or a member who has left).</p>
+      <div id="emailSetup" class="msg" hidden role="status" style="margin:0 0 14px"></div>
       <div class="buttons" style="margin-top:0"><button id="showCards" type="button" disabled>Show issued cards</button></div>
       <div id="cardsMsg" class="msg" hidden role="status"></div>
       <div id="cardsWrap" hidden>
@@ -237,6 +238,13 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
         c.textContent = test
           ? "Connected to Passcreator. Using the TEST template “"+j.templateName+"”: cards made now are for testing."
           : "Connected to Passcreator. Using the REAL membership template “"+j.templateName+"”: going live changes members' cards.";
+        if(j.emailSetup){
+          $("emailSetup").hidden = false;
+          $("emailSetup").className = "msg " + (j.emailSetup.adHoc ? "ok" : "err");
+          $("emailSetup").textContent = j.emailSetup.adHoc
+            ? "Email check: \u201c" + j.templateName + "\u201d has an email template chosen for sending cards" + (j.emailSetup.adHocSubject ? " (subject \u201c" + j.emailSetup.adHocSubject + "\u201d)" : "") + ", so Passcreator should send them."
+            : "Email check: \u201c" + j.templateName + "\u201d has NO email template chosen for sending cards (\u201cad hoc\u201d sendout), so Passcreator won't send any card emails. In Passcreator, open this template's sendout / email settings and choose your email template there. Making an email template isn't enough on its own: it has to be chosen on this template.";
+        }
         if(j.designTemplate) c.textContent += " A new card design “" + j.designTemplate.name + "” is ready (ID " + j.designTemplate.id + "): to use it, put that ID in PASSCREATOR_TEMPLATE_ID in Netlify and redeploy.";
       } else {
         c.className = "conn err";
@@ -482,6 +490,9 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
       var b = el("button", "Send card email", "secondary small"); b.type = "button";
       b.addEventListener("click", function(){ sendEmail(c, b); });
       act.appendChild(b);
+      var del = el("button", "Delete", "secondary small"); del.type = "button"; del.style.marginLeft = "8px";
+      del.addEventListener("click", function(){ deleteCard(c, del); });
+      act.appendChild(del);
       if(c.link){ var a = el("a", "Card link"); a.href = c.link; a.target = "_blank"; a.rel = "noopener"; a.style.marginLeft = "10px"; act.appendChild(a); }
       tr.appendChild(act);
       tb.appendChild(tr);
@@ -517,6 +528,18 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     var a = el("a"); a.href = URL.createObjectURL(new Blob([[head].concat(lines).join("\r\n") + "\r\n"], {type:"text/csv"}));
     a.download = "card-links-" + stamp() + ".csv"; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function deleteCard(c, btn){
+    var who = c.memberNumber + (c.memberName ? " (" + c.memberName + ")" : "");
+    if(!window.confirm("Delete the card for member " + who + "?\n\nThe card is removed from Passcreator and stops updating on the member's phone. This can't be undone. To give them a card again, run the member through Go live.")) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    api({action:"delete", identifier:c.identifier}).then(function(j){
+      if(j.ok){
+        cards = cards.filter(function(x){ return x !== c; });
+        renderCards();
+        showCardsMsg("ok", "Deleted the card for member " + who + ".");
+      } else { btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", "Member " + c.memberNumber + ": " + (j.error || ("error " + j.httpStatus))); }
+    }, function(){ btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", "Couldn't reach this site's server."); });
   }
   function sendEmail(c, btn){
     var addr = window.prompt("Send member " + c.memberNumber + (c.memberName ? " (" + c.memberName + ")" : "") + " their card by email.\n\nEmail address:", exportEmail(c.memberNumber));
