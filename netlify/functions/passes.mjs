@@ -36,7 +36,8 @@ async function templateName(client, templateId) {
 export default async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'Use POST' });
 
-  const apiKey = (Netlify.env.get('PASSCREATOR_API_KEY') || '').trim();
+  // Forgive common paste slips: the variable name pasted too, surrounding quotes, a "Bearer " prefix (Passcreator wants the bare key).
+  const apiKey = (Netlify.env.get('PASSCREATOR_API_KEY') || '').trim().replace(/^PASSCREATOR_API_KEY\s*=\s*/i, '').replace(/^(['"])(.*)\1$/, '$2').replace(/^Bearer\s+/i, '').trim();
   const templateId = (Netlify.env.get('PASSCREATOR_TEMPLATE_ID') || '').trim();
   if (!apiKey || !templateId) {
     return fatal(500, 'The site is not set up yet: PASSCREATOR_API_KEY and PASSCREATOR_TEMPLATE_ID must both be set in the Netlify site settings.');

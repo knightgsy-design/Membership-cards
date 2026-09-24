@@ -72,3 +72,14 @@ test('missing settings and wrong method are reported', async () => {
   const g = await handler(new Request('https://x/api/passes'));
   assert.strictEqual(g.status, 405);
 });
+
+test('a pasted key with quotes or a Bearer prefix is cleaned', async () => {
+  const seen = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { seen.push(init.headers.Authorization); return orig(url, init); };
+  env.PASSCREATOR_API_KEY = ' PASSCREATOR_API_KEY="Bearer abc123" ';
+  await post({ action: 'status' });
+  env.PASSCREATOR_API_KEY = 'secret-key';
+  globalThis.fetch = orig;
+  assert.strictEqual(seen[0], 'abc123');
+});
