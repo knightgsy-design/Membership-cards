@@ -28,8 +28,12 @@ function cleanMember(m) {
 async function templateName(client, templateId) {
   const r = await client.request('GET', '/api/pass-template');
   if (r.error) return { error: `couldn't read the template list from Passcreator (${r.error})` };
-  const t = (Array.isArray(r.json) ? r.json : []).find(t => t.identifier === templateId);
-  if (!t) return { error: 'the template ID in the Netlify settings was not found, or this API key cannot see it' };
+  const list = Array.isArray(r.json) ? r.json : [];
+  const t = list.find(t => t.identifier === templateId);
+  if (!t) {
+    const seen = list.map(t => `"${t.name}" = ${t.identifier}`).join('; ') || 'none';
+    return { error: `${templateId ? `the template ID "${templateId}" was not found` : 'PASSCREATOR_TEMPLATE_ID is not set'}. Templates this API key can see: ${seen}. Copy the right ID into PASSCREATOR_TEMPLATE_ID in the Netlify settings and redeploy` };
+  }
   return { name: t.name };
 }
 
@@ -39,12 +43,12 @@ export default async (req) => {
   // Forgive common paste slips: the variable name pasted too, surrounding quotes, a "Bearer " prefix (Passcreator wants the bare key).
   const apiKey = (Netlify.env.get('PASSCREATOR_API_KEY') || '').trim().replace(/^PASSCREATOR_API_KEY\s*=\s*/i, '').replace(/^(['"])(.*)\1$/, '$2').replace(/^Bearer\s+/i, '').trim();
   const templateId = (Netlify.env.get('PASSCREATOR_TEMPLATE_ID') || '').trim();
-  if (!apiKey || !templateId) {
-    return fatal(500, 'The site is not set up yet: PASSCREATOR_API_KEY and PASSCREATOR_TEMPLATE_ID must both be set in the Netlify site settings.');
-  }
+  if (!apiKey) return fatal(500, 'The site is not set up yet: PASSCREATOR_API_KEY must be set in the Netlify site settings.');
 
   let body;
   try { body = await req.json(); } catch { return reply(400, { error: 'Bad request' }); }
+  // Without a template ID only "status" works, so it can list the templates to choose from.
+  if (!templateId && body.action !== 'status') return fatal(500, 'PASSCREATOR_TEMPLATE_ID must be set in the Netlify site settings.');
 
   // Short retries here: a Netlify function has about 10 seconds. The page retries whole batches.
   const client = makeClient({ apiKey, retryDelays: [1000, 2000] });

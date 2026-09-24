@@ -66,9 +66,18 @@ test('rejected key is fatal and the key is never echoed', async () => {
 
 test('missing settings and wrong method are reported', async () => {
   delete env.PASSCREATOR_TEMPLATE_ID;
-  const j = await (await post({ action: 'status' })).json();
+  let j = await (await post({ action: 'status' })).json();
+  assert.ok(j.fatal && /not set\. Templates this API key can see: "GYC Membership TEST" = tmpl-test/.test(j.error), j.error);
+  j = await (await post({ action: 'run', live: false, members: [member('1')] })).json();
+  assert.ok(j.fatal && /TEMPLATE_ID must be set/.test(j.error));
+  env.PASSCREATOR_TEMPLATE_ID = 'wrong';
+  j = await (await post({ action: 'status' })).json();
+  assert.match(j.error, /"wrong" was not found/);
   env.PASSCREATOR_TEMPLATE_ID = 'tmpl-test';
-  assert.ok(j.fatal && /must both be set/.test(j.error));
+  delete env.PASSCREATOR_API_KEY;
+  j = await (await post({ action: 'status' })).json();
+  env.PASSCREATOR_API_KEY = 'secret-key';
+  assert.match(j.error, /API_KEY must be set/);
   const g = await handler(new Request('https://x/api/passes'));
   assert.strictEqual(g.status, 405);
 });
