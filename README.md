@@ -13,6 +13,11 @@ their phone, and has a **Send card email** button to (re)send a card.
 Nothing needs installing. The rest of this file covers the offline alternative (running it
 on your own computer), which does the same job.
 
+**A second, independent system also exists** in `own-wallet/`, which issues cards directly on the
+club's own Apple Developer and Google Cloud accounts instead of through Passcreator — no per-card fee,
+but real setup effort and an Apple Developer cost of its own. See `own-wallet/README.md` before using
+it; it is not switched on by default and this page is unaffected by it either way.
+
 ---
 
 This folder puts members' Guernsey Yacht Club cards into Apple Wallet and Google Wallet,

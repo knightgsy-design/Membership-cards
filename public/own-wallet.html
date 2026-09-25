@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>GYC Cards (own wallet accounts)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --ground:#EEF1F4; --paper:#FFFFFF; --ink:#16212E; --muted:#4F5B69; --line:#CBD3DC;
+  --navy:#13294B; --navy-ink:#FFFFFF; --gold:#94712C; --ok:#1E6B45; --ok-bg:#E3F1E8;
+  --warn:#8A4E07; --warn-bg:#FBEFD9; --err:#9B2C1F; --err-bg:#F8E3DF; --focus:#2B6CB0;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1622; --paper:#162233; --ink:#E8EDF3; --muted:#A8B4C2; --line:#2C3B50;
+    --navy:#9FB6DA; --navy-ink:#0E1622; --gold:#D7B46A; --ok:#7FD1A2; --ok-bg:#15352A;
+    --warn:#F0C27A; --warn-bg:#3A2A10; --err:#F2A396; --err-bg:#3D1C17; --focus:#8DB7F0;
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.55 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 16px 64px}
+h1,h2{font-family:Newsreader,Georgia,"Times New Roman",serif;font-weight:600;line-height:1.15;margin:0}
+h1{font-size:clamp(28px,6vw,38px)}
+.lede{color:var(--muted);max-width:60ch;margin:12px 0 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.tag.err{background:var(--err-bg);color:var(--err)} .tag.warn{background:var(--warn-bg);color:var(--warn)} .tag.ok{background:var(--ok-bg);color:var(--ok)}
+.conn{margin-top:20px;padding:12px 14px;border-radius:10px;font-size:15px;border:1px solid var(--line);background:var(--paper)}
+.conn.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.conn.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.conn.err{background:var(--err-bg);color:var(--err);border-color:transparent}
+.step{display:grid;grid-template-columns:56px minmax(0,1fr);gap:16px;margin-top:36px}
+.num{font-family:Newsreader,Georgia,serif;font-size:44px;line-height:1;color:var(--gold);font-weight:500}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px}
+h2{font-size:22px;margin-bottom:6px}
+.hint{color:var(--muted);margin:0 0 14px;font-size:15px}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:560px){.row{grid-template-columns:minmax(0,1fr)}.step{grid-template-columns:minmax(0,1fr);gap:4px}.num{font-size:32px}}
+label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
+input[type=text],input[type=date],input[type=password],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible,.drop:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+.drop{position:relative;display:block;border:2px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer}
+.drop.over{border-color:var(--navy);background:var(--ground)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.drop strong{display:block;font-size:17px}
+.filename{margin-top:8px;color:var(--muted);font-size:14px}
+button{min-height:48px;padding:0 22px;border-radius:24px;border:0;background:var(--navy);color:var(--navy-ink);font:600 16px "Public Sans",system-ui,sans-serif;cursor:pointer}
+button.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.live{background:var(--err);color:var(--paper)}
+button.small{min-height:34px;padding:0 12px;font-size:13px}
+button[disabled]{opacity:.45;cursor:not-allowed}
+a{color:var(--navy)}
+.buttons{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+.map{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+@media (max-width:560px){.map{grid-template-columns:minmax(0,1fr)}}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 16px}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font-size:22px;font-family:Newsreader,Georgia,serif}
+.stat span{font-size:13px;color:var(--muted)}
+.scroll{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;background:var(--ground);position:sticky;top:0}
+.msg{margin-top:12px;padding:12px 14px;border-radius:10px;font-size:15px}
+.msg.ok{background:var(--ok-bg);color:var(--ok)} .msg.err{background:var(--err-bg);color:var(--err)} .msg.warn{background:var(--warn-bg);color:var(--warn)}
+progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
+.foot{margin-top:40px;color:var(--muted);font-size:14px;max-width:60ch}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>GYC Cards — own Apple &amp; Google accounts</h1>
+  <p class="lede">Issues and updates Apple Wallet and Google Wallet cards directly on the club's own Apple Developer and Google Cloud accounts — no Passcreator, no per-card fee. Set up once (see own-wallet/README.md); this page is the day-to-day tool. <a href="/">Use the Passcreator version instead</a>.</p>
+  <div class="conn" id="conn" role="status">Checking…</div>
+  <div id="gate" class="card" style="margin-top:20px">
+    <label for="pass">Site passphrase</label>
+    <input id="pass" type="password" autocomplete="current-password">
+    <div class="buttons"><button id="unlock" type="button">Unlock</button></div>
+    <div id="gateMsg" class="msg" hidden role="status"></div>
+  </div>
+
+  <div id="app" hidden>
+    <section class="step" aria-labelledby="s1">
+      <div class="num" aria-hidden="true">1</div>
+      <div class="card">
+        <h2 id="s1">Set the season</h2>
+        <p class="hint">Members with no expiry date in the export get the season end date.</p>
+        <div class="row">
+          <div><label for="season">Season shown on cards</label><input id="season" type="text" value="2026/27"></div>
+          <div><label for="seasonEnd">Season end date</label><input id="seasonEnd" type="date" value="2027-03-31"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <div class="num" aria-hidden="true">2</div>
+      <div class="card">
+        <h2 id="s2">Add the member export</h2>
+        <p class="hint">Export current members from Sailing Club Manager as CSV, then drop the file here.</p>
+        <label class="drop" id="drop" for="file">
+          <input id="file" type="file" accept=".csv,text/csv">
+          <strong>Choose the CSV file</strong>
+          <span>or drag it onto this box</span>
+          <div class="filename" id="fileName"></div>
+        </label>
+        <div id="mapWrap" hidden>
+          <p class="hint" style="margin-top:18px">Check each field points at the right column.</p>
+          <div class="map" id="map"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <div class="num" aria-hidden="true">3</div>
+      <div class="card">
+        <h2 id="s3">Check the members</h2>
+        <p class="hint" id="s3hint">Add a file to see the results.</p>
+        <div id="results" hidden>
+          <div class="stats">
+            <div class="stat"><b id="stRead">0</b><span>rows read</span></div>
+            <div class="stat"><b id="stOut">0</b><span>cards to issue</span></div>
+            <div class="stat"><b id="stLapsed">0</b><span>lapsed, left out</span></div>
+            <div class="stat"><b id="stErr">0</b><span>errors, left out</span></div>
+          </div>
+          <div id="issuesWrap" hidden>
+            <div class="scroll"><table><thead><tr><th>Row</th><th>Issue</th><th>Member no.</th><th>Name</th></tr></thead><tbody id="issues"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s4">
+      <div class="num" aria-hidden="true">4</div>
+      <div class="card">
+        <h2 id="s4">Update the cards</h2>
+        <p class="hint">Practice run checks everyone and changes nothing. Go live creates/updates cards on Apple and/or Google Wallet, whichever is set up (see the banner above).</p>
+        <div class="buttons">
+          <button id="practice" type="button" disabled>Practice run</button>
+          <button id="live" class="live" type="button" disabled>Go live</button>
+        </div>
+        <progress id="prog" value="0" max="1" hidden></progress>
+        <div id="runMsg" class="msg" hidden role="status"></div>
+        <div id="runWrap" hidden>
+          <div class="stats" id="runStats"></div>
+          <div class="scroll"><table><thead><tr><th>Member no.</th><th>Result</th><th>Details</th></tr></thead><tbody id="runBody"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s5">
+      <div class="num" aria-hidden="true">+</div>
+      <div class="card">
+        <h2 id="s5">Add or update one member</h2>
+        <p class="hint">For a member who joins mid-season, without an export.</p>
+        <div class="row">
+          <div><label for="mNum">Member number</label><input id="mNum" type="text" autocomplete="off"></div>
+          <div><label for="mName">Name on card</label><input id="mName" type="text" autocomplete="off"></div>
+          <div><label for="mEmail">Email (optional)</label><input id="mEmail" type="text" inputmode="email" autocomplete="off"></div>
+          <div><label for="mType">Membership type</label><input id="mType" type="text" autocomplete="off"></div>
+          <div><label for="mExp">Valid to</label><input id="mExp" type="date"></div>
+          <div><label for="mSeason">Season</label><input id="mSeason" type="text" autocomplete="off"></div>
+        </div>
+        <div class="buttons"><button id="mGo" type="button">Add / update card</button></div>
+        <div id="mMsg" class="msg" hidden role="status"></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s6">
+      <div class="num" aria-hidden="true">&#10003;</div>
+      <div class="card">
+        <h2 id="s6">Cards issued</h2>
+        <p class="hint">Every member with a card on this system. Get each wallet's own link to send to the member (there's no built-in email sender here — use your own email, or the club's).</p>
+        <div class="buttons" style="margin-top:0"><button id="showCards" type="button">Show cards</button></div>
+        <div id="cardsMsg" class="msg" hidden role="status"></div>
+        <div id="cardsWrap" hidden>
+          <div class="stats" id="cardStats"></div>
+          <div class="scroll"><table><thead><tr><th>Member no.</th><th>Name</th><th>Valid to</th><th></th></tr></thead><tbody id="cardsBody"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot">This system does not use Passcreator or send emails itself. Card links are yours to send however you like. Reconciling a fresh export against issued cards isn't built here yet — use the list above and the export side by side, or ask for it to be added.</p>
+</main>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var passphrase = "";
+  try { passphrase = sessionStorage.getItem("ownWalletPass") || ""; } catch(e){}
+
+  function api(body){
+    return fetch("/api/own-wallet", {method:"POST", headers:{"Content-Type":"application/json", "X-Own-Wallet-Passphrase": passphrase}, body:JSON.stringify(body)})
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ j.httpStatus = r.status; return j; }); });
+  }
+
+  var MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+  var SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var FIELDS = [
+    {key:"memberNumber", label:"Member number", need:true, alias:["memberno","membernumber","membershipnumber","membershipno","memberid","membersid","id","number","ref","reference"]},
+    {key:"fullName", label:"Full name", need:false, alias:["name","fullname","membername","displayname"]},
+    {key:"firstName", label:"First name", need:false, alias:["firstname","forename","forenames","givenname","first"]},
+    {key:"lastName", label:"Last name", need:false, alias:["lastname","surname","familyname","last"]},
+    {key:"email", label:"Email", need:true, alias:["email","emailaddress","email1","primaryemail"]},
+    {key:"membershipType", label:"Membership type", need:true, alias:["membershiptype","membership","membershipcategory","category","type","class","grade"]},
+    {key:"expiry", label:"Expiry date", need:false, alias:["expirydate","expiry","expires","expirationdate","renewaldate","enddate","validto","membershipexpiry","paiduntil","paidto"]}
+  ];
+  var headers = [], rows = [], mapping = {}, outRows = [], errRows = [];
+  function norm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+  function clean(v){ return v == null ? "" : String(v).trim(); }
+  function el(t, x, cls){ var e = document.createElement(t); if(x != null) e.textContent = x; if(cls) e.className = cls; return e; }
+  function parseDate(s){
+    s = clean(s); if(!s) return null; var m;
+    if((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return mk(+m[1], +m[2]-1, +m[3]);
+    if((m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/))){ var y=+m[3]; if(y<100) y+=2000; return mk(y, +m[2]-1, +m[1]); }
+    if((m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?,?\s+(\d{4})/))){ var mo = MONTHS[m[2].slice(0,4).toLowerCase()]; if(mo==null) mo = MONTHS[m[2].slice(0,3).toLowerCase()]; if(mo!=null) return mk(+m[3], mo, +m[1]); }
+    return null;
+  }
+  function mk(y,m,d){ var dt = new Date(Date.UTC(y,m,d)); return (dt.getUTCFullYear()===y && dt.getUTCMonth()===m && dt.getUTCDate()===d) ? dt : null; }
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function nice(d){ return d.getUTCDate()+" "+SHORT[d.getUTCMonth()]+" "+d.getUTCFullYear(); }
+  function todayUTC(){ var n=new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())); }
+
+  // ---- unlock ----
+  function checkConnection(){
+    api({action:"status"}).then(function(j){
+      var c = $("conn");
+      if(j.apple === undefined){ c.className = "conn err"; c.textContent = "Can't reach this site's server. Check your internet connection."; return; }
+      var bits = [];
+      bits.push(j.apple.ready ? "Apple Wallet: ready" + (j.apple.push ? " (with push updates)" : " (no push key set: passes won't auto-refresh on their own until reopened)") : "Apple Wallet: not set up");
+      bits.push(j.google.ready ? "Google Wallet: ready" : "Google Wallet: not set up");
+      c.className = "conn " + ((j.apple.ready || j.google.ready) ? "ok" : "warn");
+      c.textContent = bits.join(" · ");
+      var ready = j.apple.ready || j.google.ready;
+      // j.unlocked is only present once a passphrase has actually been sent and checked; treat
+      // anything else (including a first load with none typed yet) as locked.
+      var unlocked = j.unlocked === true;
+      $("gate").hidden = unlocked;
+      $("app").hidden = !unlocked;
+      if(passphrase && !unlocked){ gateMsg("err", "Wrong passphrase."); try { sessionStorage.removeItem("ownWalletPass"); } catch(e){} passphrase = ""; }
+      if(unlocked){ try { sessionStorage.setItem("ownWalletPass", passphrase); } catch(e){} }
+      if(unlocked && !ready) showRunMsgOnce("This site isn't set up yet: see own-wallet/README.md and set the environment variables in Netlify.");
+      updateButtons();
+    }).catch(function(){ var c = $("conn"); c.className = "conn err"; c.textContent = "Can't reach this site's server."; });
+  }
+  function gateMsg(kind, text){ var m = $("gateMsg"); if(!m) return; m.className = "msg "+kind; m.textContent = text; m.hidden = false; }
+  var warnedNotReady = false;
+  function showRunMsgOnce(t){ if(warnedNotReady) return; warnedNotReady = true; var m = $("runMsg"); m.className = "msg warn"; m.textContent = t; m.hidden = false; }
+  $("unlock").addEventListener("click", function(){
+    passphrase = clean($("pass").value);
+    checkConnection();
+  });
+
+  // ---- column mapping / validation (same rules as the converter) ----
+  function guess(){
+    var used = {};
+    FIELDS.forEach(function(f){
+      var hit = "";
+      for(var i=0;i<f.alias.length && !hit;i++) for(var j=0;j<headers.length;j++){ if(!used[headers[j]] && norm(headers[j])===f.alias[i]){ hit = headers[j]; break; } }
+      mapping[f.key] = hit; if(hit) used[hit] = true;
+    });
+  }
+  function renderMap(){
+    var box = $("map"); box.textContent = "";
+    FIELDS.forEach(function(f){
+      var wrap = el("div");
+      var lab = el("label", f.label + (f.need ? "" : " (optional)")); lab.htmlFor = "map_"+f.key;
+      var sel = el("select"); sel.id = "map_"+f.key;
+      var none = el("option", "Not in this file"); none.value = ""; sel.appendChild(none);
+      headers.forEach(function(h){ var o = el("option", h); o.value = h; if(h===mapping[f.key]) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener("change", function(){ mapping[f.key] = sel.value; build(); });
+      wrap.appendChild(lab); wrap.appendChild(sel); box.appendChild(wrap);
+    });
+    $("mapWrap").hidden = false;
+  }
+  function build(){
+    var season = clean($("season").value), seasonEnd = parseDate($("seasonEnd").value), today = todayUTC();
+    var issues = [], seen = {}, lapsed = 0; outRows = []; errRows = [];
+    rows.forEach(function(r, idx){
+      var rowNo = idx + 2;
+      var get = function(k){ return mapping[k] ? clean(r[mapping[k]]) : ""; };
+      var num = get("memberNumber"), name = get("fullName") || [get("firstName"), get("lastName")].filter(Boolean).join(" "), email = get("email"), type = get("membershipType");
+      var rawExp = get("expiry"), exp = rawExp ? parseDate(rawExp) : seasonEnd, bad = [];
+      if(!num) bad.push("No member number");
+      if(!name) bad.push("No name");
+      if(rawExp && !exp) bad.push("Expiry date not recognised: "+rawExp);
+      if(!exp) bad.push("No expiry date and no season end set");
+      if(num && seen[num]) bad.push("Duplicate member number (first seen row "+seen[num]+")");
+      if(bad.length){ bad.forEach(function(b){ issues.push({row:rowNo, kind:"err", text:b, num:num, name:name}); }); errRows.push({memberNumber:num, action:"failed", reason:"row "+rowNo+": "+bad.join("; ")}); return; }
+      seen[num] = rowNo;
+      if(exp < today){ lapsed++; return; }
+      if(!email) issues.push({row:rowNo, kind:"warn", text:"No email: send the wallet link by hand", num:num, name:name});
+      if(!type) issues.push({row:rowNo, kind:"warn", text:"No membership type", num:num, name:name});
+      outRows.push({memberNumber:num, memberName:name, email:email, membershipType:type, validTo:nice(exp), passExpiry:iso(exp), season:season});
+    });
+    $("stRead").textContent = rows.length; $("stOut").textContent = outRows.length; $("stLapsed").textContent = lapsed; $("stErr").textContent = errRows.length;
+    var tb = $("issues"); tb.textContent = "";
+    issues.slice(0,300).forEach(function(i){
+      var tr = el("tr"); tr.appendChild(el("td", i.row));
+      var c2 = el("td"); c2.appendChild(el("span", i.kind==="err"?"Error":"Warning", "tag "+i.kind)); c2.appendChild(document.createTextNode(" "+i.text)); tr.appendChild(c2);
+      tr.appendChild(el("td", i.num)); tr.appendChild(el("td", i.name)); tb.appendChild(tr);
+    });
+    $("issuesWrap").hidden = issues.length === 0;
+    $("s3hint").textContent = outRows.length ? "Review any issues, then go to step 4." : "No cards to issue. Check the column mapping in step 2.";
+    $("results").hidden = false;
+    updateButtons();
+  }
+  function dataKey(){ return JSON.stringify(outRows); }
+  var practisedKey = null, running = false;
+  function updateButtons(){
+    var ready = !$("app").hidden && outRows.length > 0 && !running;
+    $("practice").disabled = !ready;
+    $("live").disabled = !ready || practisedKey !== dataKey();
+  }
+  function load(file){
+    if(!file) return;
+    if(!window.Papa){ $("s3hint").textContent = "The CSV reader didn't load. Check your connection and reload."; return; }
+    $("fileName").textContent = file.name;
+    Papa.parse(file, {header:true, skipEmptyLines:"greedy", transformHeader:clean, complete:function(res){
+      headers = (res.meta.fields||[]).filter(function(h){ return h !== ""; }); rows = res.data || [];
+      if(!headers.length || !rows.length){ $("s3hint").textContent = "That file has no rows."; $("results").hidden = true; outRows = []; updateButtons(); return; }
+      guess(); renderMap(); build();
+    }, error:function(){ $("s3hint").textContent = "That file couldn't be read."; }});
+  }
+  var drop = $("drop");
+  $("file").addEventListener("change", function(e){ load(e.target.files[0]); });
+  ["dragenter","dragover"].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add("over"); }); });
+  ["dragleave","drop"].forEach(function(ev){ drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove("over"); }); });
+  drop.addEventListener("drop", function(e){ if(e.dataTransfer && e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  $("season").addEventListener("input", function(){ $("mSeason").value = clean($("season").value); if(rows.length) build(); });
+  $("seasonEnd").addEventListener("change", function(){ $("mExp").value = $("seasonEnd").value; if(rows.length) build(); });
+
+  // ---- run (practice/live) ----
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  var BATCH = 10;
+  function sendBatch(batch, live){
+    var delays = [2000,4000,8000];
+    function attempt(n){
+      return api({action:"run", live:live, members:batch}).then(function(j){
+        if(j.results) return j;
+        if(n < delays.length) return sleep(delays[n]).then(function(){ return attempt(n+1); });
+        return {results: batch.map(function(m){ return {memberNumber:m.memberNumber, action:"failed", reason:j.error || ("error "+j.httpStatus)}; })};
+      }, function(){
+        if(n < delays.length) return sleep(delays[n]).then(function(){ return attempt(n+1); });
+        return {results: batch.map(function(m){ return {memberNumber:m.memberNumber, action:"failed", reason:"lost the internet connection"}; })};
+      });
+    }
+    return attempt(0);
+  }
+  function showMsg(kind, text){ var m = $("runMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = false; }
+  var log = [];
+  function renderRun(){
+    var counts = {}; log.forEach(function(r){ counts[r.action] = (counts[r.action]||0)+1; });
+    var st = $("runStats"); st.textContent = "";
+    Object.keys(counts).forEach(function(a){ var d = el("div", null, "stat"); d.appendChild(el("b", counts[a])); d.appendChild(el("span", a)); st.appendChild(d); });
+    var tb = $("runBody"); tb.textContent = "";
+    log.slice().sort(function(a,b){ return (a.action==="failed"?0:1)-(b.action==="failed"?0:1); }).forEach(function(r){
+      var tr = el("tr"); tr.appendChild(el("td", r.memberNumber));
+      var c = el("td"); c.appendChild(el("span", r.action, "tag "+(r.action==="failed"?"err":(r.action==="unchanged"?"":"ok")))); tr.appendChild(c);
+      tr.appendChild(el("td", r.reason)); tb.appendChild(tr);
+    });
+    $("runWrap").hidden = false;
+    return counts;
+  }
+  function run(live){
+    if(running) return;
+    if(live && !window.confirm("Go live?\n\n"+outRows.length+" members' cards will be created or updated. This can't be undone.")) return;
+    running = true; updateButtons();
+    var key = dataKey(), batches = [];
+    for(var i=0;i<outRows.length;i+=BATCH) batches.push(outRows.slice(i, i+BATCH));
+    log = errRows.slice();
+    var prog = $("prog"); prog.max = outRows.length; prog.value = 0; prog.hidden = false;
+    showMsg("warn", (live?"Live run":"Practice run")+" in progress. Keep this page open.");
+    var done = 0, p = Promise.resolve();
+    batches.forEach(function(b){
+      p = p.then(function(){ return sendBatch(b, live); }).then(function(j){
+        log = log.concat(j.results); done += b.length; prog.value = done;
+        showMsg("warn", (live?"Live run":"Practice run")+": "+done+" of "+outRows.length+" done. Keep this page open.");
+      });
+    });
+    p.then(function(){
+      var counts = renderRun();
+      if(!live) practisedKey = key;
+      var failed = counts.failed || 0;
+      showMsg(failed ? "err" : "ok", live
+        ? (failed ? "Finished, but "+failed+" failed: see Details." : "Finished. All cards are up to date.")
+        : "Practice run finished. Nothing was changed."+(failed ? " "+failed+" would fail." : " If it looks right, click Go live."));
+    }).catch(function(e){ renderRun(); showMsg("err", "Stopped: "+((e&&e.message)||"something went wrong")); })
+     .then(function(){ running = false; prog.hidden = true; updateButtons(); });
+  }
+  $("practice").addEventListener("click", function(){ run(false); });
+  $("live").addEventListener("click", function(){ run(true); });
+
+  // ---- manual add ----
+  function showM(kind, text){ var m = $("mMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = false; }
+  $("mGo").addEventListener("click", function(){
+    var exp = parseDate($("mExp").value);
+    var row = {memberNumber:clean($("mNum").value), memberName:clean($("mName").value), email:clean($("mEmail").value), membershipType:clean($("mType").value), validTo: exp?nice(exp):"", passExpiry: exp?iso(exp):"", season:clean($("mSeason").value)};
+    var bad = [];
+    if(!row.memberNumber) bad.push("member number"); if(!row.memberName) bad.push("name"); if(!row.passExpiry) bad.push("valid-to date"); if(!row.season) bad.push("season");
+    if(bad.length){ showM("err", "Please fill in: "+bad.join(", ")+"."); return; }
+    $("mGo").disabled = true; showM("warn", "Working…");
+    api({action:"run", live:true, members:[row]}).then(function(j){
+      $("mGo").disabled = false;
+      var r = j.results && j.results[0];
+      if(!r){ showM("err", j.error || "something went wrong"); return; }
+      if(r.action === "failed") showM("err", r.reason);
+      else showM("ok", "Member "+r.memberNumber+": "+r.action+(r.reason?" ("+r.reason+")":"")+". Use “Show cards” below to get their wallet link.");
+    }, function(){ $("mGo").disabled = false; showM("err", "Couldn't reach this site's server."); });
+  });
+
+  // ---- issued cards ----
+  function showCardsMsg(kind, text){ var m = $("cardsMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = !text; }
+  $("showCards").addEventListener("click", function(){
+    $("showCards").disabled = true; showCardsMsg("warn", "Loading…");
+    api({action:"list"}).then(function(j){
+      if(!j.members){ showCardsMsg("err", j.error || ("error "+j.httpStatus)); return; }
+      showCardsMsg("", "");
+      var st = $("cardStats"); st.textContent = "";
+      var d = el("div", null, "stat"); d.appendChild(el("b", j.members.length)); d.appendChild(el("span", "cards issued")); st.appendChild(d);
+      var tb = $("cardsBody"); tb.textContent = "";
+      j.members.forEach(function(m){
+        var tr = el("tr"); tr.appendChild(el("td", m.memberNumber)); tr.appendChild(el("td", m.memberName)); tr.appendChild(el("td", m.validTo));
+        var act = el("td");
+        var lb = el("button", "Get wallet links", "secondary small"); lb.type = "button";
+        lb.addEventListener("click", function(){ getLinks(m, lb, act); });
+        act.appendChild(lb);
+        var del = el("button", "Delete", "secondary small"); del.type = "button"; del.style.marginLeft = "8px";
+        del.addEventListener("click", function(){ deleteCard(m, del); });
+        act.appendChild(del);
+        tr.appendChild(act); tb.appendChild(tr);
+      });
+      $("cardsWrap").hidden = false;
+    }, function(){ showCardsMsg("err", "Couldn't reach this site's server."); })
+    .then(function(){ $("showCards").disabled = false; });
+  });
+  function getLinks(m, btn, cell){
+    btn.disabled = true; btn.textContent = "Loading…";
+    api({action:"links", memberNumber:m.memberNumber}).then(function(j){
+      btn.remove();
+      if(j.appleUrl){ var a = el("a", "Apple Wallet link"); a.href = j.appleUrl; a.target = "_blank"; a.rel = "noopener"; cell.insertBefore(a, cell.firstChild); cell.insertBefore(document.createTextNode(" "), cell.firstChild.nextSibling); }
+      if(j.googleUrl){ var g = el("a", "Google Wallet link"); g.href = j.googleUrl; g.target = "_blank"; g.rel = "noopener"; g.style.marginLeft = "8px"; cell.insertBefore(g, cell.children[1] || null); }
+      if(!j.appleUrl && !j.googleUrl) showCardsMsg("err", "Member "+m.memberNumber+": "+(j.error||"no wallet is set up"));
+    }, function(){ btn.disabled = false; btn.textContent = "Get wallet links"; showCardsMsg("err", "Couldn't reach this site's server."); });
+  }
+  function deleteCard(m, btn){
+    if(!window.confirm("Delete the card for member "+m.memberNumber+" ("+m.memberName+")? This can't be undone.")) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    api({action:"delete", memberNumber:m.memberNumber}).then(function(j){
+      if(j.ok){
+        btn.closest("tr").remove();
+        var stat = $("cardStats").querySelector("b");
+        if(stat) stat.textContent = Math.max(0, (+stat.textContent||0) - 1);
+        showCardsMsg("ok", "Deleted member "+m.memberNumber+".");
+      }
+      else { btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", j.error || "couldn't delete"); }
+    }, function(){ btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", "Couldn't reach this site's server."); });
+  }
+
+  $("mSeason").value = clean($("season").value);
+  $("mExp").value = $("seasonEnd").value;
+  checkConnection();
+})();
+</script>
+</body>
+</html>

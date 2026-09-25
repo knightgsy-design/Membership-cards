@@ -95,3 +95,25 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
   `list` pages and compares them with the export's valid rows (name, membership type, valid to, season); fixes reuse
   `run` (live) and `delete`. Cards not in the export, including lapsed members, are offered for deletion; bulk
   delete needs DELETE typed.
+
+## Parallel system: own Apple/Google accounts, no Passcreator (added later, at the owner's request)
+See `own-wallet/README.md` for full detail (accounts needed, costs, env vars, architecture). Summary:
+- Completely independent of the Passcreator system above: its own storage (Netlify Blobs), its own
+  card design (`own-wallet/lib/applePkpass.js`, `own-wallet/lib/googleWallet.js`), its own UI
+  (`public/own-wallet.html`). Meant to run as a *separate* Netlify site so the two don't interfere.
+- Apple: builds and signs `.pkpass` files itself (PKCS#7/CMS via node-forge, verified against
+  `openssl cms -verify` during development) and implements Apple's PassKit web service protocol
+  (register/unregister/list-updated/get-pass/log) plus APNs push, using the club's own Pass Type ID
+  certificate and (optionally) an APNs auth key. No Apple Developer account = no Apple cards.
+  https://developer.apple.com/documentation/walletpasses
+- Google: creates/updates a `genericClass`/`genericObject` via `walletobjects.googleapis.com` under
+  the club's own Google Cloud service account, and builds "Add to Google Wallet" JWT save links.
+  https://developers.google.com/wallet/generic/rest/v1
+- The secretary-facing API (`netlify/functions/own-wallet.mjs`) is gated by an app-level passphrase
+  (`OWN_WALLET_PASSPHRASE`), not Netlify's site password, because the PassKit web service
+  (`apple-passkit.mjs`) and the pass-download endpoint (`apple-pkpass.mjs`) must stay reachable by
+  members' phones and Apple's own servers — a site-wide password would block them.
+- No email sending here (unlike Passcreator): the UI hands back a personal Apple/Google wallet link
+  per member for the secretary to send however they choose.
+- `npm test` covers this with a self-signed test certificate (Apple) and a fake fetch (Google) — never
+  against real Apple/Google infrastructure, which isn't available from here.

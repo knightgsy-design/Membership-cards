@@ -8,6 +8,12 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/import.test.js test/function.test.mjs"
+    "test": "node --test test/import.test.js test/function.test.mjs test/own-wallet.test.mjs test/own-wallet-functions.test.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.1",
+    "jsonwebtoken": "^9.0.3",
+    "jszip": "^3.10.2",
+    "node-forge": "^1.4.0"
   }
 }
