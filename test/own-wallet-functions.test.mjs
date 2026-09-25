@@ -8,7 +8,7 @@ import forge from 'node-forge';
 import { default as ownWallet } from '../netlify/functions/own-wallet.mjs';
 import { default as pkpassFn } from '../netlify/functions/apple-pkpass.mjs';
 import { default as passkit } from '../netlify/functions/apple-passkit.mjs';
-import store from '../own-wallet/lib/store.js';
+import store from '../netlify/functions/lib/store.js';
 
 // A fresh fake Netlify Blobs backend per test, assigned to the global seam store.js checks for.
 function useFakeBlobs() {

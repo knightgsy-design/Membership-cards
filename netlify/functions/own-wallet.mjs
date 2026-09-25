@@ -19,12 +19,12 @@
 'use strict';
 
 import cli from '../../import.js';
-import configLib from '../../own-wallet/lib/config.js';
-import passRecord from '../../own-wallet/lib/passRecord.js';
-import store from '../../own-wallet/lib/store.js';
-import imagesLib from '../../own-wallet/lib/images.js';
-import googleWallet from '../../own-wallet/lib/googleWallet.js';
-import applePkpass from '../../own-wallet/lib/applePkpass.js';
+import configLib from './lib/config.js';
+import passRecord from './lib/passRecord.js';
+import store from './lib/store.js';
+import imagesLib from './lib/images.js';
+import googleWallet from './lib/googleWallet.js';
+import applePkpass from './lib/applePkpass.js';
 
 const { validateRows } = cli;
 const { readConfig, appleReady, applePushReady, googleReady } = configLib;

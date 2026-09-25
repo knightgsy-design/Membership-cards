@@ -99,7 +99,7 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
 ## Parallel system: own Apple/Google accounts, no Passcreator (added later, at the owner's request)
 See `own-wallet/README.md` for full detail (accounts needed, costs, env vars, architecture). Summary:
 - Completely independent of the Passcreator system above: its own storage (Netlify Blobs), its own
-  card design (`own-wallet/lib/applePkpass.js`, `own-wallet/lib/googleWallet.js`), its own UI
+  card design (`netlify/functions/lib/applePkpass.js`, `netlify/functions/lib/googleWallet.js`), its own UI
   (`public/own-wallet.html`). Meant to run as a *separate* Netlify site so the two don't interfere.
 - Apple: builds and signs `.pkpass` files itself (PKCS#7/CMS via node-forge, verified against
   `openssl cms -verify` during development) and implements Apple's PassKit web service protocol

@@ -4,9 +4,9 @@
 // account. Deliberately on a site with no Netlify-level password (see own-wallet/README.md).
 'use strict';
 
-import configLib from '../../own-wallet/lib/config.js';
-import passRecord from '../../own-wallet/lib/passRecord.js';
-import imagesLib from '../../own-wallet/lib/images.js';
+import configLib from './lib/config.js';
+import passRecord from './lib/passRecord.js';
+import imagesLib from './lib/images.js';
 
 const { readConfig, appleReady } = configLib;
 

@@ -10,12 +10,12 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-import store from '../own-wallet/lib/store.js';
-import passRecord from '../own-wallet/lib/passRecord.js';
-import googleWallet from '../own-wallet/lib/googleWallet.js';
-import applePkpass from '../own-wallet/lib/applePkpass.js';
-import { defaultAppleImages } from '../own-wallet/lib/pngGenerator.js';
-import configLib from '../own-wallet/lib/config.js';
+import store from '../netlify/functions/lib/store.js';
+import passRecord from '../netlify/functions/lib/passRecord.js';
+import googleWallet from '../netlify/functions/lib/googleWallet.js';
+import applePkpass from '../netlify/functions/lib/applePkpass.js';
+import { defaultAppleImages } from '../netlify/functions/lib/pngGenerator.js';
+import configLib from '../netlify/functions/lib/config.js';
 
 // ---- fixtures ----
 

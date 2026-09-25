@@ -4,10 +4,10 @@
 // https://developer.apple.com/documentation/walletpasses/adding-a-web-service-to-update-passes
 'use strict';
 
-import configLib from '../../own-wallet/lib/config.js';
-import passRecord from '../../own-wallet/lib/passRecord.js';
-import imagesLib from '../../own-wallet/lib/images.js';
-import store from '../../own-wallet/lib/store.js';
+import configLib from './lib/config.js';
+import passRecord from './lib/passRecord.js';
+import imagesLib from './lib/images.js';
+import store from './lib/store.js';
 
 const { readConfig, appleReady } = configLib;
 
