@@ -69,6 +69,8 @@ async function listCards(client, templateId, next) {
     memberNumber: p.userProvidedId || p.barcodeValue || '',
     memberName: p[FIELD_KEYS.memberName] ?? '',
     validTo: p[FIELD_KEYS.validTo] ?? '',
+    membershipType: p[FIELD_KEYS.membershipType] ?? '',
+    season: p[FIELD_KEYS.season] ?? '',
     createdOn: p.createdOn || '',
     onApple: Number(p.noOfActiveRegistrationsAppleWallet) || 0,
     onGoogle: Number(p.noOfActiveRegistrationsGoogleWallet) || 0,

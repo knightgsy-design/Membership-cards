@@ -163,6 +163,39 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     </div>
   </section>
 
+  <section class="step" aria-labelledby="s6">
+    <div class="num" aria-hidden="true">+</div>
+    <div class="card">
+      <h2 id="s6">Add or update one member</h2>
+      <p class="hint">For a new member who joins mid-season, or to fix one card, without an export. It checks Passcreator first and tells you what will happen before anything changes. Keep Sailing Club Manager up to date as well: it is still the master record.</p>
+      <div class="row">
+        <div><label for="mNum">Member number</label><input id="mNum" type="text" autocomplete="off"></div>
+        <div><label for="mName">Name on card</label><input id="mName" type="text" autocomplete="off"></div>
+        <div><label for="mEmail">Email (optional)</label><input id="mEmail" type="text" inputmode="email" autocomplete="off"></div>
+        <div><label for="mType">Membership type</label><input id="mType" type="text" autocomplete="off" list="mTypes"><datalist id="mTypes"></datalist></div>
+        <div><label for="mExp">Valid to</label><input id="mExp" type="date"></div>
+        <div><label for="mSeason">Season</label><input id="mSeason" type="text" autocomplete="off"></div>
+      </div>
+      <div class="buttons"><button id="mGo" type="button" disabled>Check and add card</button></div>
+      <div id="mMsg" class="msg" hidden role="status"></div>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="s7">
+    <div class="num" aria-hidden="true">&#8646;</div>
+    <div class="card">
+      <h2 id="s7">Reconcile with Passcreator</h2>
+      <p class="hint">Add a new Sailing Club Manager export in step 2, then compare it with every card in Passcreator. Nothing changes until you press a fix button and confirm.</p>
+      <div class="buttons" style="margin-top:0"><button id="recGo" type="button" disabled>Compare export with Passcreator</button></div>
+      <div id="recMsg" class="msg" hidden role="status"></div>
+      <div id="recWrap" hidden>
+        <div class="stats" id="recStats"></div>
+        <div class="scroll"><table><thead><tr><th>Member no.</th><th>Name</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody id="recBody"></tbody></table></div>
+        <div class="buttons"><button id="recFixAll" class="secondary" type="button" hidden>Add and update all cards that need it</button><button id="recDelAll" class="secondary" type="button" hidden>Delete all cards not in the export</button><button id="recDl" class="secondary" type="button">Download comparison</button></div>
+      </div>
+    </div>
+  </section>
+
   <section class="step" aria-labelledby="s5">
     <div class="num" aria-hidden="true">&#10003;</div>
     <div class="card">
@@ -200,7 +233,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
   var MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
   var SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var BATCH = 5;
-  var headers = [], rows = [], mapping = {}, outRows = [], errRows = [];
+  var headers = [], rows = [], mapping = {}, outRows = [], errRows = [], lapsedNums = {};
   var connected = false, practisedKey = null, running = false, log = [], logLive = false;
 
   var $ = function(id){ return document.getElementById(id); };
@@ -289,7 +322,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     var seasonEnd = parseDate($("seasonEnd").value);
     var today = todayUTC();
     var issues = [], seen = {}, lapsed = 0;
-    outRows = []; errRows = [];
+    outRows = []; errRows = []; lapsedNums = {};
     rows.forEach(function(r, idx){
       var rowNo = idx + 2;
       var get = function(k){ return mapping[k] ? clean(r[mapping[k]]) : ""; };
@@ -312,7 +345,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
         return;
       }
       seen[num] = rowNo;
-      if(exp < today){ lapsed++; return; }
+      if(exp < today){ lapsed++; lapsedNums[num] = name; return; }
       if(!email) issues.push({row:rowNo, kind:"warn", text:"No email: card link must be sent by hand", num:num, name:name});
       else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({row:rowNo, kind:"warn", text:"Email looks wrong: "+email, num:num, name:name});
       if(!type) issues.push({row:rowNo, kind:"warn", text:"No membership type", num:num, name:name});
@@ -341,6 +374,8 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     outRows.slice(0,5).forEach(function(o){ var tr = el("tr"); cols.forEach(function(c){ tr.appendChild(el("td", o[c])); }); pb.appendChild(tr); });
 
     $("s3hint").textContent = outRows.length ? "Review any issues, then go to step 4." : "No cards to issue. Check the column mapping in step 2.";
+    var dl = $("mTypes"); dl.textContent = ""; var seenT = {};
+    outRows.forEach(function(o){ if(o.membershipType && !seenT[o.membershipType]){ seenT[o.membershipType] = 1; var op = el("option"); op.value = o.membershipType; dl.appendChild(op); } });
     $("results").hidden = false;
     updateButtons();
   }
@@ -351,6 +386,8 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
     var ready = connected && outRows.length > 0 && !running;
     $("practice").disabled = !ready;
     $("showCards").disabled = !connected;
+    $("mGo").disabled = !connected;
+    $("recGo").disabled = !connected;
     $("live").disabled = !ready || practisedKey !== dataKey();
     $("live").title = $("live").disabled && ready ? "Do a practice run of this file first" : "";
   }
@@ -565,6 +602,184 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
   $("moreCards").addEventListener("click", function(){ loadCards(true); });
   $("cardLinks").addEventListener("click", downloadCardLinks);
   $("cardFilter").addEventListener("input", renderCards);
+
+  // ---- add or update one member ----
+  function initManual(){
+    $("mSeason").value = clean($("season").value);
+    $("mExp").value = $("seasonEnd").value;
+  }
+  function manualRow(){
+    var exp = parseDate($("mExp").value);
+    return {memberNumber:clean($("mNum").value), memberName:clean($("mName").value), email:clean($("mEmail").value),
+      membershipType:clean($("mType").value), validTo: exp ? nice(exp) : "", passExpiry: exp ? iso(exp) : "", season:clean($("mSeason").value)};
+  }
+  function showM(kind, text){ var m = $("mMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = !text; }
+  function addOne(row, done){
+    // Practice first, confirm, then live. done(result) is called with the live (or failed) result.
+    return sendBatch([row], false).then(function(j){
+      var r = j.results[0];
+      if(r.action === "failed"){ done(r); return; }
+      if(r.action === "unchanged"){ done({memberNumber:row.memberNumber, action:"unchanged", reason:"the card already shows these details"}); return; }
+      var what = r.action === "would create" ? "Create a new card for" : "Update the card for";
+      if(!window.confirm(what + " member " + row.memberNumber + " (" + row.memberName + ")?\n\n" + (r.reason || "") + (r.action === "would create" && row.email ? "\nPasscreator will email the card to " + row.email + "." : ""))){ done({memberNumber:row.memberNumber, action:"cancelled", reason:""}); return; }
+      return sendBatch([row], true).then(function(j2){ done(j2.results[0]); });
+    }).catch(function(e){ done({memberNumber:row.memberNumber, action:"failed", reason:(e && e.message) || "something went wrong"}); });
+  }
+  function manualGo(){
+    var row = manualRow(), bad = [];
+    if(!row.memberNumber) bad.push("member number");
+    if(!row.memberName) bad.push("name");
+    if(!row.passExpiry) bad.push("valid-to date");
+    if(!row.season) bad.push("season");
+    if(bad.length){ showM("err", "Please fill in: " + bad.join(", ") + "."); return; }
+    if(row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)){ showM("err", "That email address doesn't look right."); return; }
+    if(row.passExpiry < iso(todayUTC())){ showM("err", "The valid-to date is in the past."); return; }
+    $("mGo").disabled = true; showM("warn", "Checking Passcreator…");
+    addOne(row, function(r){
+      $("mGo").disabled = !connected;
+      if(r.action === "created") showM("ok", "Card created for member " + r.memberNumber + ". " + (row.email ? "Passcreator will email it to " + row.email + " (if the template's email is set up)." : "No email given: send the card link from “Cards already issued”."));
+      else if(r.action === "updated") showM("ok", "Card updated for member " + r.memberNumber + " (" + r.reason + "). It changes on the member's phone by itself.");
+      else if(r.action === "unchanged") showM("ok", "Nothing to do: member " + r.memberNumber + "'s card already shows these details.");
+      else if(r.action === "cancelled") showM("", "");
+      else showM("err", "Member " + r.memberNumber + ": " + r.reason);
+    });
+  }
+
+  // ---- reconcile ----
+  var recRows = [];
+  function showRec(kind, text){ var m = $("recMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = !text; }
+  function loadAllCards(){
+    var all = [], pages = 0;
+    function page(next){
+      return api(next ? {action:"list", next:next} : {action:"list"}).then(function(j){
+        if(!j.cards) throw new Error("couldn't load the cards: " + (j.error || ("error " + j.httpStatus)));
+        all = all.concat(j.cards); pages++;
+        showRec("warn", "Loading cards from Passcreator… " + all.length + " so far");
+        return (j.next && pages < 100) ? page(j.next) : all;
+      });
+    }
+    return page(null);
+  }
+  var FIELD_LABELS = {memberName:"name", membershipType:"membership type", validTo:"valid to", season:"season"};
+  function reconcile(){
+    if(!outRows.length && !Object.keys(lapsedNums).length){ showRec("err", "Add a member export in step 2 first."); return; }
+    $("recGo").disabled = true; $("recWrap").hidden = true;
+    loadAllCards().then(function(all){
+      cards = all; cardsNext = null; renderCards();
+      var byNum = {};
+      all.forEach(function(c){ byNum[c.memberNumber] = c; });
+      var inExport = {};
+      recRows = [];
+      outRows.forEach(function(m){
+        inExport[m.memberNumber] = true;
+        var c = byNum[m.memberNumber];
+        if(!c){ recRows.push({kind:"missing", num:m.memberNumber, name:m.memberName, detail:"no card yet", member:m}); return; }
+        var diff = Object.keys(FIELD_LABELS).filter(function(k){ return clean(c[k]) !== clean(m[k]); });
+        if(diff.length) recRows.push({kind:"changed", num:m.memberNumber, name:m.memberName, detail: diff.map(function(k){ return FIELD_LABELS[k] + ": card “" + clean(c[k]) + "”, export “" + clean(m[k]) + "”"; }).join("; "), member:m, card:c});
+        else recRows.push({kind:"ok", num:m.memberNumber, name:m.memberName, detail:"matches", card:c});
+      });
+      all.forEach(function(c){
+        if(inExport[c.memberNumber]) return;
+        var why = (c.memberNumber in lapsedNums) ? "lapsed in the export" : "not in the export";
+        recRows.push({kind:"extra", num:c.memberNumber, name:c.memberName, detail:why + (c.validTo ? " (card valid to " + c.validTo + ")" : ""), card:c});
+      });
+      showRec("", "");
+      renderRec();
+    }).catch(function(e){ showRec("err", "Stopped: " + e.message); })
+    .then(function(){ $("recGo").disabled = !connected; });
+  }
+  var REC = {missing:["Needs a card","warn"], changed:["Out of date","warn"], extra:["Not a current member","err"], ok:["Matches","ok"], done:["Fixed","ok"], deleted:["Deleted","ok"]};
+  function renderRec(){
+    var order = {missing:0, changed:1, extra:2, done:3, deleted:3, ok:4};
+    recRows.sort(function(a,b){ return order[a.kind]-order[b.kind] || String(a.num).localeCompare(String(b.num)); });
+    var counts = {};
+    recRows.forEach(function(r){ counts[r.kind] = (counts[r.kind]||0)+1; });
+    var st = $("recStats"); st.textContent = "";
+    ["missing","changed","extra","ok"].forEach(function(k){ var d = el("div", null, "stat"); d.appendChild(el("b", counts[k]||0)); d.appendChild(el("span", REC[k][0].toLowerCase())); st.appendChild(d); });
+    var tb = $("recBody"); tb.textContent = "";
+    recRows.forEach(function(r){
+      var tr = el("tr");
+      tr.appendChild(el("td", r.num)); tr.appendChild(el("td", r.name));
+      var s = el("td"); s.appendChild(el("span", REC[r.kind][0], "tag " + REC[r.kind][1])); tr.appendChild(s);
+      tr.appendChild(el("td", r.detail));
+      var a = el("td");
+      if(r.kind === "missing" || r.kind === "changed"){
+        var b = el("button", r.kind === "missing" ? "Add card" : "Update card", "secondary small"); b.type = "button";
+        b.addEventListener("click", function(){ fixOne(r, b); }); a.appendChild(b);
+      } else if(r.kind === "extra"){
+        var d = el("button", "Delete card", "secondary small"); d.type = "button";
+        d.addEventListener("click", function(){ deleteRec(r, d, true); }); a.appendChild(d);
+      }
+      tr.appendChild(a); tb.appendChild(tr);
+    });
+    $("recFixAll").hidden = !((counts.missing||0) + (counts.changed||0));
+    $("recDelAll").hidden = !(counts.extra||0);
+    $("recWrap").hidden = false;
+    if(!counts.missing && !counts.changed && !counts.extra) showRec("ok", "Everything matches: every current member has an up-to-date card, and there are no extra cards.");
+  }
+  function fixOne(r, btn){
+    btn.disabled = true; btn.textContent = "Checking…";
+    addOne(r.member, function(res){
+      if(res.action === "created" || res.action === "updated" || res.action === "unchanged"){ r.kind = "done"; r.detail = res.action + (res.reason ? ": " + res.reason : ""); renderRec(); }
+      else { btn.disabled = false; btn.textContent = r.kind === "missing" ? "Add card" : "Update card"; if(res.action === "failed") showRec("err", "Member " + r.num + ": " + res.reason); }
+    });
+  }
+  function deleteRec(r, btn, ask){
+    if(ask && !window.confirm("Delete the card for member " + r.num + " (" + r.name + ")?\n\nIt stops working on their phone. This can't be undone.")) return Promise.resolve(false);
+    if(btn){ btn.disabled = true; btn.textContent = "Deleting…"; }
+    return api({action:"delete", identifier:r.card.identifier}).then(function(j){
+      if(j.ok){ r.kind = "deleted"; r.detail = "card deleted"; cards = cards.filter(function(c){ return c !== r.card; }); return true; }
+      if(btn){ btn.disabled = false; btn.textContent = "Delete card"; }
+      showRec("err", "Member " + r.num + ": " + (j.error || ("error " + j.httpStatus))); return false;
+    });
+  }
+  function fixAll(){
+    var todo = recRows.filter(function(r){ return r.kind === "missing" || r.kind === "changed"; });
+    if(!todo.length) return;
+    if(!window.confirm("Create " + todo.filter(function(r){ return r.kind === "missing"; }).length + " new card(s) and update " + todo.filter(function(r){ return r.kind === "changed"; }).length + " card(s)?\n\nNew members are emailed their card. This can't be undone.")) return;
+    $("recFixAll").disabled = true; showRec("warn", "Working… keep this page open.");
+    var failed = 0, p = Promise.resolve();
+    for(var i=0;i<todo.length;i+=BATCH){
+      (function(chunk){
+        p = p.then(function(){ return sendBatch(chunk.map(function(r){ return r.member; }), true); }).then(function(j){
+          j.results.forEach(function(res, k){
+            var r = chunk[k];
+            if(res.action === "failed"){ failed++; r.detail = "failed: " + res.reason; }
+            else { r.kind = "done"; r.detail = res.action + (res.reason ? ": " + res.reason : ""); }
+          });
+          renderRec();
+        });
+      })(todo.slice(i, i+BATCH));
+    }
+    p.then(function(){ showRec(failed ? "err" : "ok", failed ? failed + " failed: see the Details column." : "Done. All current members now have up-to-date cards."); })
+     .catch(function(e){ showRec("err", "Stopped: " + ((e && e.message) || "something went wrong")); })
+     .then(function(){ $("recFixAll").disabled = false; renderRec(); });
+  }
+  function deleteAllExtra(){
+    var todo = recRows.filter(function(r){ return r.kind === "extra"; });
+    if(!todo.length) return;
+    var typed = window.prompt("Delete " + todo.length + " card(s) for people who are not current members in this export?\n\nThey stop working on those phones and this can't be undone. Check the list first: a member missing from the export by mistake would lose their card.\n\nType DELETE to confirm.");
+    if(clean(typed).toUpperCase() !== "DELETE") return;
+    $("recDelAll").disabled = true; showRec("warn", "Deleting… keep this page open.");
+    var failed = 0, p = Promise.resolve();
+    todo.forEach(function(r){ p = p.then(function(){ return deleteRec(r, null, false); }).then(function(ok){ if(!ok) failed++; renderRec(); }); });
+    p.then(function(){ renderCards(); showRec(failed ? "err" : "ok", failed ? failed + " couldn't be deleted." : "Deleted " + todo.length + " card(s)."); })
+     .then(function(){ $("recDelAll").disabled = false; });
+  }
+  function downloadRec(){
+    var lines = ["memberNumber,memberName,status,details"].concat(recRows.map(function(r){ return [r.num, r.name, REC[r.kind][0], r.detail].map(csvCell).join(","); }));
+    var a = el("a"); a.href = URL.createObjectURL(new Blob([lines.join("\r\n") + "\r\n"], {type:"text/csv"}));
+    a.download = "reconcile-" + stamp() + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
+  initManual();
+  $("season").addEventListener("input", function(){ $("mSeason").value = clean($("season").value); });
+  $("seasonEnd").addEventListener("change", function(){ $("mExp").value = $("seasonEnd").value; });
+  $("mGo").addEventListener("click", manualGo);
+  $("recGo").addEventListener("click", reconcile);
+  $("recFixAll").addEventListener("click", fixAll);
+  $("recDelAll").addEventListener("click", deleteAllExtra);
+  $("recDl").addEventListener("click", downloadRec);
   checkConnection();
 })();
 </script>

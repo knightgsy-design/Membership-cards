@@ -4,6 +4,10 @@
 follow the four steps on the page: set the season, add the Sailing Club Manager export, check
 the members, then **Practice run** and **Go live**. Download the results log at the end and keep it.
 The page shows at the top whether it's connected to the TEST template or the REAL one.
+**Add or update one member** makes or fixes a single card without an export (for someone who joins
+mid-season). **Reconcile with Passcreator** compares a new export with every card and lists who needs a
+card, whose card is out of date, and which cards belong to people who are no longer current members,
+with a button to fix each one.
 At the bottom, **Cards already issued** lists every card, shows whether each member has added it to
 their phone, and has a **Send card email** button to (re)send a card.
 Nothing needs installing. The rest of this file covers the offline alternative (running it

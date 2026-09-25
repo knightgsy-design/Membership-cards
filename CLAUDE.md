@@ -91,3 +91,7 @@ Checked against https://developer.passcreator.com on 24 Sep 2026.
   (`POST /api/v2/pass-template/{id}` + `/publish`). Never writes the source template. The API has no way to create
   email templates, so emails need an email template picked in Passcreator; until then the page offers a mailto
   fallback and a card-links CSV for a mail-merge. Club phone/email/website/portal/events links are still blank in CLUB.
+- Manual add: page form -> `run` action with one member (practice, confirm, then live). Reconcile: page loads all
+  `list` pages and compares them with the export's valid rows (name, membership type, valid to, season); fixes reuse
+  `run` (live) and `delete`. Cards not in the export, including lapsed members, are offered for deletion; bulk
+  delete needs DELETE typed.
