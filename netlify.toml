@@ -9,6 +9,11 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  # Netlify's dependency tracer was leaving node-forge/jszip/jsonwebtoken out of the deployed bundle
+  # (confirmed: the deployed function was ~350KB, the same as one with no dependencies at all, versus
+  # 1.12MB when esbuild bundles them locally). Force-including all installed packages sidesteps
+  # whatever the tracer was getting wrong, at the cost of a slightly larger function.
+  included_files = ["node_modules/**"]
 
 [[headers]]
   for = "/*"
