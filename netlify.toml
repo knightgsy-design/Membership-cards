@@ -1,5 +1,9 @@
 # Online version: public/index.html + netlify/functions/passes.mjs (see README "Online version").
+# The own-wallet functions have real npm dependencies (node-forge, jszip, jsonwebtoken,
+# @netlify/blobs), so an explicit install step is required — without it esbuild can't find them
+# in node_modules when bundling the functions.
 [build]
+  command = "npm install"
   publish = "public"
 
 [functions]
