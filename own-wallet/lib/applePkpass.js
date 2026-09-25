@@ -10,7 +10,19 @@ const JSZip = require('jszip');
 
 const COLORS = { background: 'rgb(19,41,75)', foreground: 'rgb(255,255,255)', label: 'rgb(215,180,106)' };
 
-function field(key, label, value) { return { key, label, value: value == null ? '' : String(value) }; }
+function field(key, label, value, extra) { return { key, label, value: value == null ? '' : String(value), ...extra }; }
+
+// Days until the Pass Type ID certificate expires (null if it can't be parsed). Used to warn before
+// it lapses — after that, existing cards keep working but stop updating, and none can be created.
+function certDaysRemaining(config) {
+  if (!config.apple.certPem) return null;
+  try {
+    const cert = forge.pki.certificateFromPem(config.apple.certPem);
+    return Math.ceil((cert.validity.notAfter.getTime() - Date.now()) / (24 * 3600 * 1000));
+  } catch {
+    return null;
+  }
+}
 
 // Builds pass.json for one member. `webServiceURL` and `authenticationToken` are what makes the pass
 // register for push updates; omit both to issue a pass that never auto-updates (still downloadable).
@@ -33,7 +45,7 @@ function buildPassJson(record, config) {
       secondaryFields: [field('membershipType', 'Membership', record.membershipType), field('validTo', 'Valid to', record.validTo)],
       auxiliaryFields: [field('memberNumber', 'Member no.', record.memberNumber)],
       backFields: [
-        field('notice', 'Latest from the club', 'Welcome aboard for the new season.'),
+        field('notice', 'Latest from the club', record.notice || 'Welcome aboard for the new season.', { changeMessage: '%@' }),
         field('atClub', 'At the club', 'Show this card at the bar for member prices, and at the door for member-only events.'),
         field('contact', 'Contact', 'Guernsey Yacht Club, Castle Emplacement, St Peter Port, Guernsey GY1 1AU\n+44 (0)1481 722838\nclub@gyc.org.gg'),
         field('terms', 'Terms', 'Personal to the named member and not transferable.'),
@@ -113,4 +125,4 @@ async function buildPkpass(record, config, images) {
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
-module.exports = { buildPassJson, buildPkpass, sha1Hex, signManifest };
+module.exports = { buildPassJson, buildPkpass, sha1Hex, signManifest, certDaysRemaining };

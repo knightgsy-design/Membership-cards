@@ -89,6 +89,20 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
   </div>
 
   <div id="app" hidden>
+    <section class="step" aria-labelledby="s0">
+      <div class="num" aria-hidden="true">&#9776;</div>
+      <div class="card">
+        <h2 id="s0">Dashboard</h2>
+        <div class="buttons" style="margin-top:0"><button id="refreshDash" type="button" class="secondary small">Refresh</button></div>
+        <div class="stats" id="dashStats" style="margin-top:14px"></div>
+        <div id="certMsg" class="msg" hidden role="status"></div>
+        <div class="row" style="margin-top:14px">
+          <div><label for="findMember">Find member</label><input id="findMember" type="text" placeholder="Member number or name" autocomplete="off"></div>
+        </div>
+        <div id="findResult" class="scroll" style="margin-top:8px" hidden><table><thead><tr><th>Member no.</th><th>Name</th><th>Valid to</th><th>Apple</th><th>Google</th></tr></thead><tbody id="findBody"></tbody></table></div>
+      </div>
+    </section>
+
     <section class="step" aria-labelledby="s1">
       <div class="num" aria-hidden="true">1</div>
       <div class="card">
@@ -174,6 +188,24 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
       </div>
     </section>
 
+    <section class="step" aria-labelledby="sA">
+      <div class="num" aria-hidden="true">&#128276;</div>
+      <div class="card">
+        <h2 id="sA">Send an announcement</h2>
+        <p class="hint">Sends a push notification to card holders' phones, and updates the "Latest from the club" field on their card. Google Wallet cards notify only if the card was made after this feature was added.</p>
+        <div class="row">
+          <div><label for="annHeadline">Headline (Google Wallet only)</label><input id="annHeadline" type="text" value="Guernsey Yacht Club" autocomplete="off"></div>
+          <div></div>
+        </div>
+        <label for="annBody" style="margin-top:10px">Message</label>
+        <textarea id="annBody" rows="3" maxlength="500" style="width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit"></textarea>
+        <div style="margin-top:10px"><label>Send to</label><div id="annTypes"></div></div>
+        <div class="buttons"><button id="annSend" type="button">Send announcement</button></div>
+        <div id="annMsg" class="msg" hidden role="status"></div>
+        <p class="hint" style="margin-top:16px">There's no email sender built into this system. If you've loaded a member export above, <button id="annNoCard" type="button" class="secondary small">download the emails of members with no card yet</button> for a mail-merge.</p>
+      </div>
+    </section>
+
     <section class="step" aria-labelledby="s6">
       <div class="num" aria-hidden="true">&#10003;</div>
       <div class="card">
@@ -249,6 +281,7 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
       if(passphrase && !unlocked){ gateMsg("err", "Wrong passphrase."); try { sessionStorage.removeItem("ownWalletPass"); } catch(e){} passphrase = ""; }
       if(unlocked){ try { sessionStorage.setItem("ownWalletPass", passphrase); } catch(e){} }
       if(unlocked && !ready) showRunMsgOnce("This site isn't set up yet: see own-wallet/README.md and set the environment variables in Netlify.");
+      if(unlocked && ready && !dashLoaded){ dashLoaded = true; loadDashboard(); }
       updateButtons();
     }).catch(function(){ var c = $("conn"); c.className = "conn err"; c.textContent = "Can't reach this site's server."; });
   }
@@ -465,6 +498,80 @@ progress{width:100%;height:12px;margin-top:14px;accent-color:var(--navy)}
       else { btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", j.error || "couldn't delete"); }
     }, function(){ btn.disabled = false; btn.textContent = "Delete"; showCardsMsg("err", "Couldn't reach this site's server."); });
   }
+
+  // ---- dashboard ----
+  var dashLoaded = false;
+  function loadDashboard(){
+    api({action:"stats"}).then(function(j){
+      if(!j.cardsIssued && j.cardsIssued !== 0){ return; }
+      var st = $("dashStats"); st.textContent = "";
+      [[j.cardsIssued, "cards issued"], [j.onApple, "on Apple Wallet"], [j.onGoogle, "on Google Wallet"], [j.expiringSoon, "expiring within 30 days"]].forEach(function(x){
+        var d = el("div", null, "stat"); d.appendChild(el("b", x[0])); d.appendChild(el("span", x[1])); st.appendChild(d);
+      });
+      if(j.certDaysRemaining != null){
+        var kind = j.certDaysRemaining < 0 ? "err" : (j.certDaysRemaining < 60 ? "warn" : "ok");
+        var m = $("certMsg"); m.className = "msg "+kind; m.hidden = false;
+        m.textContent = j.certDaysRemaining < 0
+          ? "Apple certificate expired " + Math.abs(j.certDaysRemaining) + " day(s) ago. Existing cards keep working but stop updating, and no new ones can be created. See own-wallet/README.md “Renewing the Apple certificate”."
+          : "Apple certificate: renew in " + j.certDaysRemaining + " day(s)." + (j.certDaysRemaining < 60 ? " Renew soon — see own-wallet/README.md." : "");
+      }
+      var box = $("annTypes"); box.textContent = "";
+      (j.membershipTypes||[]).forEach(function(t){
+        var lab = el("label"); lab.style.fontWeight = "400"; lab.style.display = "inline-flex"; lab.style.alignItems = "center"; lab.style.marginRight = "14px"; lab.style.marginBottom = "0";
+        var cb = document.createElement("input"); cb.type = "checkbox"; cb.value = t; cb.className = "annType"; cb.style.width = "auto"; cb.style.marginRight = "6px";
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(t)); box.appendChild(lab);
+      });
+    }, function(){});
+  }
+  $("refreshDash").addEventListener("click", loadDashboard);
+  $("findMember").addEventListener("input", function(){
+    var q = clean(this.value).toLowerCase();
+    if(!q){ $("findResult").hidden = true; return; }
+    api({action:"list"}).then(function(j){
+      if(!j.members) return;
+      var matches = j.members.filter(function(m){ return (m.memberNumber+" "+m.memberName).toLowerCase().indexOf(q) >= 0; }).slice(0, 20);
+      var tb = $("findBody"); tb.textContent = "";
+      matches.forEach(function(m){
+        var tr = el("tr"); tr.appendChild(el("td", m.memberNumber)); tr.appendChild(el("td", m.memberName)); tr.appendChild(el("td", m.validTo));
+        tr.appendChild(el("td", m.apple ? "✓" : "")); tr.appendChild(el("td", m.google ? "✓" : ""));
+        tb.appendChild(tr);
+      });
+      $("findResult").hidden = false;
+    });
+  });
+
+  // ---- announcement ----
+  function showAnn(kind, text){ var m = $("annMsg"); m.className = "msg "+kind; m.textContent = text; m.hidden = false; }
+  $("annSend").addEventListener("click", function(){
+    var message = clean($("annBody").value);
+    if(!message){ showAnn("err", "Write a message first."); return; }
+    var types = Array.prototype.slice.call(document.querySelectorAll(".annType:checked")).map(function(c){ return c.value; });
+    var who = types.length ? types.join(", ") : "all card holders";
+    if(!window.confirm("Send this to " + who + "?\n\n“" + message + "”")) return;
+    $("annSend").disabled = true; showAnn("warn", "Sending…");
+    api({action:"announce", headline: clean($("annHeadline").value), message: message, membershipTypes: types.length ? types : null}).then(function(j){
+      $("annSend").disabled = false;
+      if(!j.results){ showAnn("err", j.error || ("error "+j.httpStatus)); return; }
+      var failed = j.results.filter(function(r){ return r.action === "failed"; }).length;
+      showAnn(failed ? "err" : "ok", "Sent to " + (j.results.length-failed) + " of " + j.results.length + " member(s)." + (failed ? " " + failed + " failed." : ""));
+    }, function(){ $("annSend").disabled = false; showAnn("err", "Couldn't reach this site's server."); });
+  });
+  $("annNoCard").addEventListener("click", function(){
+    if(!outRows.length){ showAnn("err", "Load a member export in step 2 first."); return; }
+    api({action:"list"}).then(function(j){
+      if(!j.members){ showAnn("err", j.error || ("error "+j.httpStatus)); return; }
+      var have = {}; j.members.forEach(function(m){ have[m.memberNumber] = true; });
+      var missing = outRows.filter(function(r){ return !have[r.memberNumber] && r.email; });
+      if(!missing.length){ showAnn("ok", "Every member in the loaded export already has a card (or has no email)."); return; }
+      var lines = ["memberNumber,memberName,email"].concat(missing.map(function(r){ return [r.memberNumber, r.memberName, r.email].map(csvCell).join(","); }));
+      var a = el("a"); a.href = URL.createObjectURL(new Blob([lines.join("\r\n")+"\r\n"], {type:"text/csv"}));
+      a.download = "members-without-a-card-"+stamp()+".csv"; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+      showAnn("ok", "Downloaded " + missing.length + " member(s) with no card yet and an email address.");
+    }, function(){ showAnn("err", "Couldn't reach this site's server."); });
+  });
+  function csvCell(v){ var s = String(v == null ? "" : v); return /[",\r\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+  function stamp(){ var n=new Date(), p=function(x){ return String(x).padStart(2,"0"); }; return n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate()); }
 
   $("mSeason").value = clean($("season").value);
   $("mExp").value = $("seasonEnd").value;

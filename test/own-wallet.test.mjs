@@ -92,6 +92,8 @@ function fakeGoogleFetch(log = []) {
     log.push(`${init.method} ${u.pathname}`);
     const json = (status, body) => ({ ok: status < 300, status, text: async () => JSON.stringify(body), json: async () => body });
     if (u.pathname === '/token') return json(200, { access_token: 'tok', expires_in: 3600 });
+    const am = u.pathname.match(/^\/walletobjects\/v1\/genericObject\/(.+)\/addMessage$/);
+    if (am) return objects.has(am[1]) ? json(200, { ...objects.get(am[1]), messages: [JSON.parse(init.body).message] }) : json(404, { error: { message: 'not found' } });
     const m = u.pathname.match(/^\/walletobjects\/v1\/(genericClass|genericObject)(?:\/(.+))?$/);
     if (!m) return json(404, {});
     const [, kind, id] = m;
@@ -173,6 +175,22 @@ test('applePkpass: web service URL and auth token are included only once an auth
   assert.strictEqual(withToken.authenticationToken, 'abc');
 });
 
+test('applePkpass: a per-member notice overrides the default back-of-card message', () => {
+  const config = testAppleConfig();
+  const withNotice = applePkpass.buildPassJson(member('01234', { notice: 'Bar open late tonight' }), config);
+  assert.strictEqual(withNotice.generic.backFields[0].value, 'Bar open late tonight');
+  const withoutNotice = applePkpass.buildPassJson(member('01234'), config);
+  assert.match(withoutNotice.generic.backFields[0].value, /Welcome aboard/);
+});
+
+test('applePkpass: certDaysRemaining reads the test cert\'s real 1-year expiry', () => {
+  const config = testAppleConfig();
+  const days = applePkpass.certDaysRemaining(config);
+  assert.ok(days > 300 && days <= 366, days);
+  assert.strictEqual(applePkpass.certDaysRemaining({ apple: { certPem: '' } }), null);
+  assert.strictEqual(applePkpass.certDaysRemaining({ apple: { certPem: 'not a cert' } }), null);
+});
+
 // ---- googleWallet.js ----
 
 test('googleWallet: creates the class once, then creates then patches the object', async () => {
@@ -196,6 +214,23 @@ test('googleWallet: creates the class once, then creates then patches the object
     assert.ok(log.some(l => l.startsWith('POST /walletobjects/v1/genericClass')));
     assert.ok(log.some(l => l.startsWith('PATCH /walletobjects/v1/genericObject/')));
   } finally { global.fetch = origFetch; }
+});
+
+test('googleWallet: addMessage notifies an existing object, 404s for an unknown one', async () => {
+  const config = testGoogleConfig();
+  const log = [];
+  const orig = global.fetch;
+  const fetchImpl = fakeGoogleFetch(log);
+  global.fetch = (url, init) => fetchImpl(String(url).replace('https://oauth2.googleapis.com/token', 'https://x/token'), init);
+  try {
+    await googleWallet.ensureClass(config, {});
+    await googleWallet.upsertObject(member('01234'), config, {});
+    const ok = await googleWallet.addMessage(member('01234'), 'GYC', 'Bar open late', config, {});
+    assert.deepStrictEqual(ok, { ok: true });
+    assert.ok(log.some(l => l === 'POST /walletobjects/v1/genericObject/1234567890.member_01234/addMessage'));
+    const missing = await googleWallet.addMessage(member('99999'), 'GYC', 'x', config, {});
+    assert.strictEqual(missing.ok, false);
+  } finally { global.fetch = orig; }
 });
 
 test('googleWallet: save link is a valid RS256 JWT pointing at pay.google.com', async () => {

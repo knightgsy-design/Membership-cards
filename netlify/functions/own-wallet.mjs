@@ -12,6 +12,10 @@
 //   -> {"ok": true}
 // POST /api/own-wallet  {"action": "links", "memberNumber"}
 //   -> {"appleUrl": "...", "googleUrl": "..." | null}
+// POST /api/own-wallet  {"action": "stats"}
+//   -> {"cardsIssued", "onApple", "onGoogle", "expiringSoon", "membershipTypes": [...], "certDaysRemaining": n | null}
+// POST /api/own-wallet  {"action": "announce", "membershipTypes": [...] | null, "headline", "message"}
+//   -> {"results": [{"memberNumber", "action", "reason"}, ...]}   null/absent membershipTypes = everyone
 'use strict';
 
 import cli from '../../import.js';
@@ -20,6 +24,7 @@ import passRecord from '../../own-wallet/lib/passRecord.js';
 import store from '../../own-wallet/lib/store.js';
 import imagesLib from '../../own-wallet/lib/images.js';
 import googleWallet from '../../own-wallet/lib/googleWallet.js';
+import applePkpass from '../../own-wallet/lib/applePkpass.js';
 
 const { validateRows } = cli;
 const { readConfig, appleReady, applePushReady, googleReady } = configLib;
@@ -90,7 +95,7 @@ export default async (req) => {
     let members;
     try { members = await store.listMembers(); } catch (e) { return reply(502, { error: `couldn't list members: ${e.message}` }); }
     members.sort((a, b) => a.memberNumber.localeCompare(b.memberNumber));
-    return reply(200, { members: members.map(m => ({ memberNumber: m.memberNumber, memberName: m.memberName, membershipType: m.membershipType, validTo: m.validTo, season: m.season, email: m.email, createdOn: m.createdOn, modifiedOn: m.modifiedOn, apple: Boolean(m.apple), google: Boolean(m.google) })) });
+    return reply(200, { members: members.map(m => ({ memberNumber: m.memberNumber, memberName: m.memberName, membershipType: m.membershipType, validTo: m.validTo, passExpiry: m.passExpiry, season: m.season, email: m.email, createdOn: m.createdOn, modifiedOn: m.modifiedOn, apple: Boolean(m.apple), google: Boolean(m.google) })) });
   }
 
   if (body.action === 'delete') {
@@ -106,6 +111,40 @@ export default async (req) => {
     if (apple.ready) out.appleUrl = `${config.apple.webServiceBase.replace(/\/$/, '')}/.netlify/functions/apple-pkpass?member=${encodeURIComponent(memberNumber)}`;
     if (google.ready) out.googleUrl = googleWallet.saveLink(record, config);
     return reply(200, out);
+  }
+
+  if (body.action === 'stats') {
+    let members;
+    try { members = await store.listMembers(); } catch (e) { return reply(502, { error: `couldn't list members: ${e.message}` }); }
+    const soon = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const types = [...new Set(members.map(m => m.membershipType).filter(Boolean))].sort();
+    return reply(200, {
+      cardsIssued: members.length,
+      onApple: members.filter(m => m.apple).length,
+      onGoogle: members.filter(m => m.google).length,
+      expiringSoon: members.filter(m => m.passExpiry && m.passExpiry >= today && m.passExpiry <= soon).length,
+      membershipTypes: types,
+      certDaysRemaining: apple.ready ? applePkpass.certDaysRemaining(config) : null,
+    });
+  }
+
+  if (body.action === 'announce') {
+    let members;
+    try { members = await store.listMembers(); } catch (e) { return reply(502, { error: `couldn't list members: ${e.message}` }); }
+    const wanted = Array.isArray(body.membershipTypes) && body.membershipTypes.length ? new Set(body.membershipTypes) : null;
+    const headline = String(body.headline || 'Guernsey Yacht Club').trim().slice(0, 60);
+    const message = String(body.message || '').trim().slice(0, 500);
+    if (!message) return reply(400, { error: 'No message given.' });
+    const targets = members.filter(m => !wanted || wanted.has(m.membershipType));
+    if (!targets.length) return reply(400, { error: 'No members match that filter.' });
+    if (targets.length > 500) return reply(400, { error: `That's ${targets.length} members in one go; send to a smaller group at a time.` });
+    const results = [];
+    for (const m of targets) {
+      const r = await passRecord.announce(m.memberNumber, headline, message, config).catch(e => ({ action: 'failed', reason: e.message }));
+      results.push({ memberNumber: m.memberNumber, ...r });
+    }
+    return reply(200, { results });
   }
 
   return reply(400, { error: 'Unknown action' });

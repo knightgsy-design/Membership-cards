@@ -117,3 +117,15 @@ See `own-wallet/README.md` for full detail (accounts needed, costs, env vars, ar
   per member for the secretary to send however they choose.
 - `npm test` covers this with a self-signed test certificate (Apple) and a fake fetch (Google) — never
   against real Apple/Google infrastructure, which isn't available from here.
+
+## Dashboard, find-member, announcements (added to own-wallet, matching a committee-dashboard mockup)
+- `stats` action: cards issued, Apple/Google split, expiring within 30 days, membership types present,
+  and `certDaysRemaining` (parsed from the Apple cert's real notAfter date via node-forge).
+- `announce` action: sets each targeted member's stored `notice` (shown on the Apple card's back field,
+  changeMessage triggers the on-device banner) and pushes; for Google, calls
+  `genericObject/{id}/addMessage` with `messageType: TEXT_AND_NOTIFY`
+  (https://developers.google.com/wallet/reference/rest/v1/genericobject/addmessage). Capped at 500
+  members per call.
+- Deliberately NOT built: automatic Sailing Club Manager sync (the mockup showed one; out of scope per
+  the top of this file, and no SCM API access exists to build it). "Email members without a card" is a
+  CSV download for a mail-merge, not real sending — this system has no email sender.

@@ -77,4 +77,26 @@ async function buildApplePkpass(memberNumber, config, images, deps = {}) {
   return { buffer: await applePkpass.buildPkpass(record, config, images), record };
 }
 
-module.exports = { upsert, remove, buildApplePkpass, changed, TRACKED_FIELDS };
+// Pushes a club notice to one member's card(s): sets the Apple "Latest from the club" field and pushes
+// it, and adds a Google Wallet notification message. Returns {action:'sent'|'failed', reason}.
+async function announce(memberNumber, headline, body, config, deps = {}) {
+  const record = await store.getMember(memberNumber, deps.store);
+  if (!record) return { action: 'failed', reason: 'no card for that member' };
+  const errors = [];
+  if (appleReady(config)) {
+    record.notice = body;
+    record.modifiedOn = new Date().toISOString();
+    await store.putMember(record, deps.store);
+    if (applePushReady(config)) {
+      const p = await applePush.pushSerial(config.apple.passTypeId, memberNumber, config, deps.store, deps.push).catch(e => ({ error: e.message }));
+      if (p.error) errors.push(`Apple push: ${p.error}`);
+    }
+  }
+  if (googleReady(config) && record.google) {
+    const g = await googleWallet.addMessage(record, headline, body, config, deps.google).catch(e => ({ ok: false, error: e.message }));
+    if (!g.ok) errors.push(`Google Wallet: ${g.error}`);
+  }
+  return errors.length ? { action: 'failed', reason: errors.join('; ') } : { action: 'sent', reason: '' };
+}
+
+module.exports = { upsert, remove, buildApplePkpass, announce, changed, TRACKED_FIELDS };

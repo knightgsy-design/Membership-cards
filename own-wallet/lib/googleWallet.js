@@ -129,6 +129,13 @@ async function voidObject(record, config, deps) {
   return patch.ok ? { ok: true } : { ok: false, error: patch.error };
 }
 
+// Pushes a notification to one member's Google Wallet card. https://developers.google.com/wallet/reference/rest/v1/genericobject/addmessage
+async function addMessage(record, header, body, config, deps) {
+  const id = objectId(config, record.memberNumber);
+  const r = await callApi(`genericObject/${encodeURIComponent(id)}/addMessage`, 'POST', { message: { header, body, messageType: 'TEXT_AND_NOTIFY' } }, config, deps);
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}
+
 // The "Add to Google Wallet" link for one member's object (no API call needed to build this).
 function saveLink(record, config) {
   const now = Math.floor(Date.now() / 1000);
@@ -147,4 +154,4 @@ function saveLink(record, config) {
   return `https://pay.google.com/gp/v/save/${token}`;
 }
 
-module.exports = { classId, objectId, buildClass, buildObject, ensureClass, upsertObject, voidObject, saveLink, getAccessToken };
+module.exports = { classId, objectId, buildClass, buildObject, ensureClass, upsertObject, voidObject, addMessage, saveLink, getAccessToken };

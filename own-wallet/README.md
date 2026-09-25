@@ -105,6 +105,16 @@ Open `/own-wallet.html` on this site, enter the passphrase, and it works like th
 set the season, drop in the Sailing Club Manager export, practice run, go live. There's also a form to
 add one member by hand, and a list of issued cards.
 
+**Dashboard**, at the top: cards issued, the Apple/Google split, how many expire within 30 days, and a
+warning once the Apple certificate has under 60 days left (or has expired). **Find member** searches
+issued cards by number or name.
+
+**Send an announcement** pushes a message to card holders' phones (updates the "Latest from the club"
+field on Apple cards and sends a Google Wallet notification), to everyone or to one or more membership
+types. It does not touch Sailing Club Manager or send email. For members who don't have a card yet,
+"download the emails of members with no card yet" gives a CSV of anyone in the currently-loaded export
+without a card and with an email, for a mail-merge in your own email program.
+
 **No emails are sent automatically.** For each member, click "Get wallet links" to get their personal
 Apple Wallet and/or Google Wallet link, and send it however you'd send anything else — your own email,
 the club's newsletter system, or a text message.

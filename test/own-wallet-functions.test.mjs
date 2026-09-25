@@ -169,3 +169,34 @@ test('apple-passkit.mjs: register, list-for-device, get-pass, and unregister, wi
   const unregAgain = await passkit(new Request(base, { method: 'DELETE', headers: { authorization: `ApplePass ${record.authToken}` } }));
   assert.strictEqual(unregAgain.status, 404);
 });
+
+test('own-wallet.mjs: stats and announce', async () => {
+  useFakeBlobs(); useTestEnv();
+  await post({ action: 'run', live: true, members: [
+    { ...MEMBER, memberNumber: '11111', membershipType: 'Full sailing' },
+    { ...MEMBER, memberNumber: '22222', membershipType: 'Social' },
+  ] }, withKey);
+
+  const stats = await (await post({ action: 'stats' }, withKey)).json();
+  assert.strictEqual(stats.cardsIssued, 2);
+  assert.strictEqual(stats.onApple, 2);
+  assert.strictEqual(stats.onGoogle, 0);
+  assert.deepStrictEqual(stats.membershipTypes.sort(), ['Full sailing', 'Social']);
+  assert.strictEqual(typeof stats.certDaysRemaining, 'number');
+  assert.ok(stats.certDaysRemaining > 300 && stats.certDaysRemaining <= 366);
+
+  const noMsg = await post({ action: 'announce', message: '' }, withKey);
+  assert.strictEqual(noMsg.status, 400);
+
+  const filtered = await (await post({ action: 'announce', membershipTypes: ['Social'], headline: 'GYC', message: 'Bar open late tonight' }, withKey)).json();
+  assert.strictEqual(filtered.results.length, 1);
+  assert.strictEqual(filtered.results[0].memberNumber, '22222');
+  assert.strictEqual(filtered.results[0].action, 'sent');
+
+  const all = await (await post({ action: 'announce', message: 'AGM next week' }, withKey)).json();
+  assert.strictEqual(all.results.length, 2);
+  assert.ok(all.results.every(r => r.action === 'sent'));
+
+  const none = await post({ action: 'announce', membershipTypes: ['Junior'], message: 'x' }, withKey);
+  assert.strictEqual(none.status, 400);
+});
